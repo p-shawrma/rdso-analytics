@@ -3,6 +3,7 @@ import pandas as pd
 import psycopg2
 import numpy as np
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 
 # Function to create a database connection using psycopg2
 @st.cache(allow_output_mutation=True, ttl=600, show_spinner=False)
