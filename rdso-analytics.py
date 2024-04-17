@@ -87,7 +87,7 @@ def process_data(df):
     return df
 
 def plot_data(df):
-    # Create traces
+    # Create traces for the smoothed current and voltage
     trace1 = go.Scatter(
         x=df['timestamp'],
         y=df['smoothed_current'],
@@ -105,7 +105,7 @@ def plot_data(df):
         yaxis='y2'
     )
     
-    # Create layout for a secondary y-axis
+    # Layout with dual-axis configuration
     layout = go.Layout(
         title='Smoothed Current and Voltage Over Time',
         xaxis=dict(title='Timestamp'),
@@ -114,11 +114,17 @@ def plot_data(df):
             title='Smoothed Voltage (V)',
             overlaying='y',
             side='right'
-        )
+        ),
+        autosize=True,  # Enable autosize to fill the container width
+        template='plotly_white'  # Optional: use a Plotly theme for nicer styling
     )
     
     # Combine traces and layout into a figure
     fig = go.Figure(data=[trace1, trace2], layout=layout)
+    fig.update_layout(
+        autosize=True,  # Ensures that plot size adjusts based on the container size
+        margin=dict(l=20, r=20, t=40, b=20),  # Reduces margins to make use of available space
+    )
     return fig
 
 def main():
@@ -141,7 +147,7 @@ def main():
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
             fig = plot_data(processed_df)
-            st.plotly_chart(fig)
+            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
         else:
             st.write("No data found for the selected date range.")
 
