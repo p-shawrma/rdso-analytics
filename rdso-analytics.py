@@ -64,7 +64,7 @@ def process_data(df):
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
 
-    # Sidebar for date input and cycle filtering
+    # Sidebar for date input
     with st.sidebar:
         st.title("Filter Settings")
         start_date = st.date_input("Start Date", datetime.now().date() - timedelta(days=7))
@@ -74,13 +74,13 @@ def main():
             st.error("End date must be after start date.")
         fetch_button = st.button("Fetch Data")
 
+    # Display data without cycle filter
     if fetch_button:
-        df = get_data(start_date, end_date)  # Directly calling the function without passing the engine
+        df = get_data(start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
-            cycle_number = st.sidebar.selectbox("Select Discharge Cycle", processed_df['cycle'].unique())
-            filtered_data = processed_df[processed_df['cycle'] == cycle_number]
-            st.dataframe(filtered_data[['timestamp', 'Battery_Pack_Current(A)', 'Battery_Pack_Voltage(V)', 'smoothed_voltage', 'discharge', 'pos_pulse', 'cycle']])
+            st.write("Data Overview:")
+            st.dataframe(processed_df)  # Display the entire dataframe
         else:
             st.write("No data found for the selected date range.")
 
