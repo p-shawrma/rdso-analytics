@@ -83,6 +83,26 @@ def process_data(df):
 
     return df
 
+def plot_data(df):
+    fig, ax1 = plt.subplots()
+
+    # Plot smoothed current on the primary y-axis
+    color = 'tab:red'
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Smoothed Current (A)', color=color)
+    ax1.plot(df['timestamp'], df['smoothed_current'], color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    # Create a second y-axis for the smoothed voltage
+    ax2 = ax1.twinx()  
+    color = 'tab:blue'
+    ax2.set_ylabel('Smoothed Voltage (V)', color=color)  # we already handled the x-label with ax1
+    ax2.plot(df['timestamp'], df['smoothed_voltage'], color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    fig.tight_layout()  # To ensure there's no overlap
+    return fig
+
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
 
@@ -96,13 +116,14 @@ def main():
             st.error("End date must be after start date.")
         fetch_button = st.button("Fetch Data")
 
-    # Display data without cycle filter
     if fetch_button:
         df = get_data(start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
+            fig = plot_data(processed_df)
+            st.pyplot(fig)
         else:
             st.write("No data found for the selected date range.")
 
