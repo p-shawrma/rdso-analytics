@@ -1,56 +1,78 @@
+
 import streamlit as st
 import pandas as pd
+import numpy as np
 import psycopg2
-from datetime import datetime
+from datetime import datetime, timedelta
 
-def create_connection():
-    return psycopg2.connect(
+# Function to create a database connection
+@st.cache(ttl=600, suppress_st_warning=True)
+def get_data(start_date, end_date):
+    with psycopg2.connect(
         dbname="postgres",
-        user="postgres.kfuizzxktmneperhsekb",  # Replace with your actual username
-        password="RDSO_Analytics_Change@2015",  # Replace with your actual password
-        host="aws-0-ap-southeast-1.pooler.supabase.com",  # Replace with your actual host
+        user="postgres.kfuizzxktmneperhsekb",  # Replace with your username
+        password="RDSO_Analytics_Change@2015",  # Replace with your password
+        host="aws-0-ap-southeast-1.pooler.supabase.com",  # Replace with your host
         port="5432"
-    )
-
-# Function to fetch data from the database
-def fetch_data(start_date, end_date):
-    with create_connection() as conn:
+    ) as conn:
+        # Formatted SQL query to fetch all relevant data between two dates
         query = """
-        SELECT * FROM public.custom_report_rdso
+        SELECT created_at, "Battery_Pack_Current(A)", "Battery_Pack_Voltage(V)"
+        FROM public.custom_report_rdso
         WHERE created_at BETWEEN %s AND %s;
         """
-        # Convert dates to datetime at the start of the start_date and the end of the end_date
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(end_date, datetime.max.time())
-
-        # Print the datetime parameters to debug
-        print("Fetching data between:", start_datetime, "and", end_datetime)
-
-        # Fetch data using a DataFrame
-        df = pd.read_sql_query(query, conn, params=[start_datetime, end_datetime])
+        df = pd.read_sql_query(query, conn, params=[start_date, end_date])
     return df
 
-# Main function to run the Streamlit app
-def main():
-    st.set_page_config(layout="wide", page_title="Battery Discharge Analysis Dashboard")
+def process_data(df):
+    df['timestamp'] = pd.to_datetime(df['created_at'])
+    df = df.sort_values(by='timestamp')
+    df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
 
-    # Sidebar for user inputs
+    # Identify discharge periods and positive pulses
+    df['discharge'] = df['Battery_Pack_Current(A)'] < 0
+    df['pos_current'] = df['Battery_Pack_Current(A)'] > 0
+    df['pos_duration'] = df['pos_current'] * df['time_diff']
+    df['pos_pulse'] = df['pos_duration'].rolling(window=3).sum()  # Adjust based on actual data frequency
+
+    df['pos_pulse'] = (df['pos_pulse'] < 30) & df['pos_current']
+
+    # Smoothing voltage to identify voltage drops
+    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].rolling(window=5, center=True).mean()
+    df['voltage_change'] = df['smoothed_voltage'].diff()
+    df['discharge_start'] = (df['discharge'] == True) & (df['discharge'].shift(1) == False)
+    df['discharge_end'] = (df['discharge'] == False) & (df['discharge'].shift(1) == True)
+
+    # Tagging cycles
+    df['cycle'] = df['discharge_start'].cumsum()
+
+    return df
+
+def main():
+    st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
+
+    # Sidebar for date input and cycle filtering
     with st.sidebar:
-        st.title("Data Filter Settings")
-        start_date = st.date_input("Start date", datetime.now().date() - timedelta(days=7))
-        end_date = st.date_input("End date", datetime.now().date())
+        st.title("Filter Settings")
+        start_date = st.date_input("Start Date", datetime.now().date() - timedelta(days=7))
+        end_date = st.date_input("End Date", datetime.now().date())
+
         if start_date > end_date:
             st.error("End date must be after start date.")
-        fetch_button = st.button("Fetch Data")
-
-    # Data fetching and display
-    if fetch_button:
-        df = fetch_data(start_date, end_date)
-        if not df.empty:
-            st.write("Data fetched successfully.")
-            st.dataframe(df)
         else:
-            st.error("No data found for the selected date range.")
+            fetch_button = st.button("Fetch Data")
+
+    if 'fetch_button' in st.session_state and st.session_state.fetch_button:
+        df = get_data(start_date, end_date)
+        if not df.empty:
+            processed_df = process_data(df)
+            st.write("Filtered Data:")
+            cycle_number = st.sidebar.selectbox("Select Discharge Cycle", processed_df['cycle'].unique())
+            filtered_data = processed_df[processed_df['cycle'] == cycle_number]
+            st.dataframe(filtered_data[['timestamp', 'Battery_Pack_Current(A)', 'Battery_Pack_Voltage(V)', 'smoothed_voltage', 'discharge', 'pos_pulse', 'cycle']])
+        else:
+            st.write("No data found for the selected date range.")
 
 if __name__ == "__main__":
     main()
+
