@@ -1,51 +1,48 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022)
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import streamlit as st
-from streamlit.logger import get_logger
+import pandas as pd
+import psycopg2
+from datetime import datetime
 
-LOGGER = get_logger(__name__)
-
-
-def run():
-    st.set_page_config(
-        page_title="Hello",
-        page_icon="👋",
+def create_connection():
+    return psycopg2.connect(
+        dbname="postgres",
+        user="postgres.kfuizzxktmneperhsekb",  # Replace with your actual username
+        password="RDSO_Analytics_Change@2015",  # Replace with your actual password
+        host="aws-0-ap-southeast-1.pooler.supabase.com",  # Replace with your actual host
+        port="5432"
     )
 
-    st.write("# Welcome to Streamlit! 👋")
-
-    st.sidebar.success("Select a demo above.")
-
-    st.markdown(
+def fetch_data(start_date, end_date):
+    with create_connection() as conn:
+        query = """
+        SELECT *, ("Cell_Voltage_1_(V)" + "Cell_Voltage_2_(V)" + ... + "Cell_Voltage_35_(V)") AS "Total_Voltage"
+        FROM public.custom_report_rdso
+        WHERE created_at BETWEEN %s AND %s;
         """
-        Streamlit is an open-source app framework built specifically for
-        Machine Learning and Data Science projects.
-        **👈 Select a demo from the sidebar** to see some examples
-        of what Streamlit can do!
-        ### Want to learn more?
-        - Check out [streamlit.io](https://streamlit.io)
-        - Jump into our [documentation](https://docs.streamlit.io)
-        - Ask a question in our [community
-          forums](https://discuss.streamlit.io)
-        ### See more complex demos
-        - Use a neural net to [analyze the Udacity Self-driving Car Image
-          Dataset](https://github.com/streamlit/demo-self-driving)
-        - Explore a [New York City rideshare dataset](https://github.com/streamlit/demo-uber-nyc-pickups)
-    """
-    )
+        df = pd.read_sql_query(query, conn, params=[start_date, end_date])
+    return df
 
+def main():
+    st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
+
+    with st.sidebar:
+        st.title("Filter Settings")
+        start_date = st.date_input("Start date", datetime.now().date())
+        end_date = st.date_input("End date", datetime.now().date())
+        if start_date > end_date:
+            st.error("End date must be after start date.")
+        fetch_button = st.button("Fetch Data")
+
+    if fetch_button:
+        df = fetch_data(start_date, end_date)
+        df['timestamp'] = pd.to_datetime(df['created_at'])
+        df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
+        df['discharge'] = df['Battery_Pack_Current(A)'] < 0
+        df['cycle'] = df['discharge'].cumsum()  # Simple cycle counting
+        df['smoothed_voltage'] = df['Total_Voltage'].rolling(window=5, center=True).mean()
+        df['voltage_drop'] = df['smoothed_voltage'].diff() < 0
+
+        st.dataframe(df[['timestamp', 'Battery_Pack_Current(A)', 'Total_Voltage', 'smoothed_voltage', 'discharge', 'cycle']])
 
 if __name__ == "__main__":
-    run()
+    main()
