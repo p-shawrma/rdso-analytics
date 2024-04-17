@@ -3,3 +3,5 @@ numpy
 pandas
 pydeck
 streamlit
+psycopg2-binary
+plotly
