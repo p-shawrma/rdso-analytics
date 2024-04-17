@@ -5,3 +5,4 @@ pydeck
 streamlit
 psycopg2-binary
 plotly
+sqlalchemy
