@@ -43,26 +43,35 @@ def process_data(df):
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
 
-    # Smoothing current and voltage with exponential moving average
-    forgetting_factor = 3
-    alpha = 2 / (forgetting_factor + 1)
-    df['smoothed_current'] = df['Battery_Pack_Current(A)'].ewm(alpha=alpha).mean()
-    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=alpha).mean()
+    # Base alpha for an expected time difference, e.g., 1 second
+    base_time_diff = 10  # Base time difference in seconds
+    base_alpha = 0.2    # You can adjust this based on your expected decay rate
 
-    # Define a small epsilon for zero current tolerance
-    epsilon = 0.1  # Adjust this value based on what you consider 'effectively zero'
+    # Adjust alpha based on actual time difference
+    # If the time difference is less, increase alpha (more weight to recent value)
+    # If the time difference is more, decrease alpha (less weight to recent value)
+    df['alpha'] = base_alpha / df['time_diff'] * base_time_diff
+    df['alpha'] = df['alpha'].clip(upper=1)  # Ensure alpha does not exceed 1
 
-    # Define conditions for charging, discharging, and idle states
+    # Apply dynamic EMA
+    # We use the `apply` method to calculate a weighted mean iteratively
+    ema_current = 0
+    smoothed_currents = []
+    for i, row in df.iterrows():
+        ema_current = ema_current * (1 - row['alpha']) + row['Battery_Pack_Current(A)'] * row['alpha']
+        smoothed_currents.append(ema_current)
+    df['smoothed_current'] = smoothed_currents
+
+    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()  # Static EMA for voltage
+
+    # Define conditions and choices as before
+    epsilon = 0.1
     conditions = [
-        df['smoothed_current'] > epsilon,   # Charging condition
-        df['smoothed_current'] < -epsilon,  # Discharging condition
+        df['smoothed_current'] > epsilon,  # Charging condition
+        df['smoothed_current'] < -epsilon, # Discharging condition
         abs(df['smoothed_current']) <= epsilon  # Idle condition
     ]
-
-    # Define the choice for each condition
     choices = ['charge', 'discharge', 'idle']
-
-    # Use np.select to apply conditions and choices to the dataframe
     df['state'] = np.select(conditions, choices, default='idle')
 
     return df
