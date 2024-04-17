@@ -12,24 +12,14 @@ def create_connection():
         port="5432"
     )
 
-def fetch_data(start_date, end_date):
+def fetch_data():
     with create_connection() as conn:
         query = """
-        SELECT created_at, "Battery_Pack_Voltage(V)", "Battery_Pack_Current(A)",
-               "Max_Cell_Voltage_(V)", "Min_Cell_Voltage_(V)",
-               "Max_Cell_Temp_(C)", "Min_Cell_Temp_(C)", "SOC(%)"
+        SELECT created_at, "Battery_Pack_Voltage(V)", "Battery_Pack_Current(A)"
         FROM public.custom_report_rdso
-        WHERE created_at BETWEEN %s AND %s;
+        LIMIT 10;
         """
-        # Convert dates to datetime at the start of the start_date and the end of the end_date
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(end_date, datetime.max.time())
-        
-        # Debug: print or log the datetime values
-        print("Start datetime:", start_datetime)
-        print("End datetime:", end_datetime)
-
-        df = pd.read_sql_query(query, conn, params=[start_datetime, end_datetime])
+        df = pd.read_sql_query(query, conn)
     return df
 
 # Example usage within a Streamlit app:
