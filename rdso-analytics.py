@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-import sqlalchemy
+import psycopg2
 from datetime import datetime, timedelta
-from urllib.parse import quote_plus
-
 
 # Function to create a database connection using psycopg2
+@st.cache(allow_output_mutation=True, ttl=600, show_spinner=False)
 def get_data(start_date, end_date):
     # Connection parameters
     user = "postgres.kfuizzxktmneperhsekb"
@@ -22,7 +21,7 @@ def get_data(start_date, end_date):
         host=host,
         port=port
     )
-
+    
     # Formatted SQL query to fetch all relevant data between two dates
     query = """
     SELECT *
@@ -41,12 +40,6 @@ def get_data(start_date, end_date):
     conn.close()
     
     return df
-
-# Process data and main function remains the same as before...
-# ...
-
-
-
 
 def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
