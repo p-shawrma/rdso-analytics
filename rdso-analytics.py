@@ -4,32 +4,47 @@ import sqlalchemy
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 
-# Function to create a SQLAlchemy database connection
-def create_engine():
-    password = quote_plus("RDSO_Analytics_Change@2015")  # URL encode the password
+
+# Function to create a database connection using psycopg2
+def get_data(start_date, end_date):
+    # Connection parameters
     user = "postgres.kfuizzxktmneperhsekb"
+    password = "RDSO_Analytics_Change@2015"
     host = "aws-0-ap-southeast-1.pooler.supabase.com"
     port = "5432"
     dbname = "postgres"
-    database_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-    engine = sqlalchemy.create_engine(database_url)
-    return engine
+    
+    # Connect to the database
+    conn = psycopg2.connect(
+        dbname=dbname,
+        user=user,
+        password=password,
+        host=host,
+        port=port
+    )
 
-# Removed the engine parameter from get_data since we don't want to cache the engine object
-@st.cache(allow_output_mutation=True, show_spinner=False)
-def get_data(start_date, end_date):
-    engine = create_engine()  # Create the engine inside the function
     # Formatted SQL query to fetch all relevant data between two dates
     query = """
     SELECT *
     FROM public.custom_report_rdso
     WHERE created_at BETWEEN %s AND %s;
     """
-    df = pd.read_sql_query(query, engine, params=[start_date, end_date])
-    engine.dispose()  # Close the connection
+    
+    # Convert dates to strings to ensure compatibility with the SQL query
+    start_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
+    end_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Execute the query and fetch data
+    df = pd.read_sql_query(query, conn, params=(start_str, end_str))
+    
+    # Close the database connection
+    conn.close()
+    
     return df
 
-# ... rest of the process_data and main functions
+# Process data and main function remains the same as before...
+# ...
+
 
 
 
