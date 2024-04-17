@@ -15,12 +15,20 @@ def create_connection():
 def fetch_data(start_date, end_date):
     with create_connection() as conn:
         query = """
-        SELECT *, ("Cell_Voltage_1_(V)" + "Cell_Voltage_2_(V)" + ... + "Cell_Voltage_35_(V)") AS "Total_Voltage"
+        SELECT created_at, "Battery_Pack_Voltage(V)", "Battery_Pack_Current(A)",
+               "Max_Cell_Voltage_(V)", "Min_Cell_Voltage_(V)",
+               "Max_Cell_Temp_(C)", "Min_Cell_Temp_(C)", "SOC(%)"
         FROM public.custom_report_rdso
         WHERE created_at BETWEEN %s AND %s;
         """
-        df = pd.read_sql_query(query, conn, params=[start_date, end_date])
+        # Convert dates to datetime at the start of the start_date and the end of the end_date
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.max.time())
+        df = pd.read_sql_query(query, conn, params=[start_datetime, end_datetime])
     return df
+
+# Example usage within a Streamlit app:
+import streamlit as st
 
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
@@ -35,14 +43,10 @@ def main():
 
     if fetch_button:
         df = fetch_data(start_date, end_date)
-        df['timestamp'] = pd.to_datetime(df['created_at'])
-        df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
-        df['discharge'] = df['Battery_Pack_Current(A)'] < 0
-        df['cycle'] = df['discharge'].cumsum()  # Simple cycle counting
-        df['smoothed_voltage'] = df['Total_Voltage'].rolling(window=5, center=True).mean()
-        df['voltage_drop'] = df['smoothed_voltage'].diff() < 0
-
-        st.dataframe(df[['timestamp', 'Battery_Pack_Current(A)', 'Total_Voltage', 'smoothed_voltage', 'discharge', 'cycle']])
+        if not df.empty:
+            st.dataframe(df)
+        else:
+            st.write("No data found for the selected date range.")
 
 if __name__ == "__main__":
     main()
