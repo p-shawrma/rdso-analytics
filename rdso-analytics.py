@@ -85,6 +85,35 @@ def process_data(df):
     df['state'] = np.select(conditions, choices, default='idle')
 
     return df
+def calculate_percentile(n):
+    def percentile_(x):
+        return np.percentile(x, n)
+    percentile_.__name__ = 'percentile_%s' % n
+    return percentile_
+
+def process_grouped_data(df):
+    # Group by continuous states and apply calculations
+    grouped = df.groupby((df['state'] != df['state'].shift()).cumsum())
+    result = grouped.agg(
+        start_timestamp=('timestamp', 'min'),
+        end_timestamp=('timestamp', 'max'),
+        step_type=('state', 'first'),
+        duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
+        soc_start=('SOC(%)', 'first'),
+        soc_end=('SOC(%)', 'last'),
+        voltage_start=('Battery_Pack_Voltage(V)', 'first'),
+        voltage_end=('Battery_Pack_Voltage(V)', 'last'),
+        average_current=('Battery_Pack_Current(A)', 'mean'),
+        median_current=('Battery_Pack_Current(A)', 'median'),
+        min_current=('Battery_Pack_Current(A)', 'min'),
+        max_current=('Battery_Pack_Current(A)', 'max'),
+        current_25th=('Battery_Pack_Current(A)', calculate_percentile(25)),
+        current_75th=('Battery_Pack_Current(A)', calculate_percentile(75)),
+        median_max_cell_temperature=('Max_Cell_Temp_(C)', 'median'),
+        median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
+        median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
+    )
+    return result
 
 def plot_data(df):
     # Create traces for the smoothed current and voltage
@@ -144,10 +173,13 @@ def main():
         df = get_data(start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
+            grouped_df = process_grouped_data(processed_df)
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
             fig = plot_data(processed_df)
             st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
+            st.write("Grouped Data Overview:")
+            st.dataframe(grouped_df)  # Display the grouped data
         else:
             st.write("No data found for the selected date range.")
 
