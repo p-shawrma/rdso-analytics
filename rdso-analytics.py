@@ -4,6 +4,8 @@ import psycopg2
 import numpy as np
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+
 
 # Function to create a database connection using psycopg2
 @st.cache(allow_output_mutation=True, ttl=600, show_spinner=False)
@@ -85,23 +87,38 @@ def process_data(df):
     return df
 
 def plot_data(df):
-    fig, ax1 = plt.subplots()
-
-    # Plot smoothed current on the primary y-axis
-    color = 'tab:red'
-    ax1.set_xlabel('Timestamp')
-    ax1.set_ylabel('Smoothed Current (A)', color=color)
-    ax1.plot(df['timestamp'], df['smoothed_current'], color=color)
-    ax1.tick_params(axis='y', labelcolor=color)
-
-    # Create a second y-axis for the smoothed voltage
-    ax2 = ax1.twinx()  
-    color = 'tab:blue'
-    ax2.set_ylabel('Smoothed Voltage (V)', color=color)  # we already handled the x-label with ax1
-    ax2.plot(df['timestamp'], df['smoothed_voltage'], color=color)
-    ax2.tick_params(axis='y', labelcolor=color)
-
-    fig.tight_layout()  # To ensure there's no overlap
+    # Create traces
+    trace1 = go.Scatter(
+        x=df['timestamp'],
+        y=df['smoothed_current'],
+        mode='lines',
+        name='Smoothed Current (A)',
+        line=dict(color='red')
+    )
+    
+    trace2 = go.Scatter(
+        x=df['timestamp'],
+        y=df['smoothed_voltage'],
+        mode='lines',
+        name='Smoothed Voltage (V)',
+        line=dict(color='blue'),
+        yaxis='y2'
+    )
+    
+    # Create layout for a secondary y-axis
+    layout = go.Layout(
+        title='Smoothed Current and Voltage Over Time',
+        xaxis=dict(title='Timestamp'),
+        yaxis=dict(title='Smoothed Current (A)'),
+        yaxis2=dict(
+            title='Smoothed Voltage (V)',
+            overlaying='y',
+            side='right'
+        )
+    )
+    
+    # Combine traces and layout into a figure
+    fig = go.Figure(data=[trace1, trace2], layout=layout)
     return fig
 
 def main():
@@ -124,7 +141,7 @@ def main():
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
             fig = plot_data(processed_df)
-            st.pyplot(fig)
+            st.plotly_chart(fig)
         else:
             st.write("No data found for the selected date range.")
 
