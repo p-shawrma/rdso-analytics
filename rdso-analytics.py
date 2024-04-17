@@ -15,33 +15,22 @@ def create_engine():
     engine = sqlalchemy.create_engine(database_url)
     return engine
 
-@st.cache_resource
-# ...
-
+# Removed the engine parameter from get_data since we don't want to cache the engine object
 @st.cache(allow_output_mutation=True, show_spinner=False)
-def get_data(_engine, start_date, end_date):
-    try:
-        # Adjusted SQL query to fetch all relevant data between two dates
-        query = """
-        SELECT *
-        FROM public.custom_report_rdso
-        WHERE created_at BETWEEN %s AND %s;
-        """
-        # Convert to string to prevent timezone issues
-        start_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-        end_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"Querying data between {start_str} and {end_str}")
-        
-        df = pd.read_sql_query(query, _engine, params=[start_str, end_str])
-        if df.empty:
-            st.warning("Query successful but no data returned.")
-        return df
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-        return pd.DataFrame()
+def get_data(start_date, end_date):
+    engine = create_engine()  # Create the engine inside the function
+    # Formatted SQL query to fetch all relevant data between two dates
+    query = """
+    SELECT *
+    FROM public.custom_report_rdso
+    WHERE created_at BETWEEN %s AND %s;
+    """
+    df = pd.read_sql_query(query, engine, params=[start_date, end_date])
+    engine.dispose()  # Close the connection
+    return df
 
-# Main function and other components remain the same
-# ...
+# ... rest of the process_data and main functions
+
 
 
 def process_data(df):
