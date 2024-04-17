@@ -2,14 +2,19 @@ import streamlit as st
 import pandas as pd
 import sqlalchemy
 from datetime import datetime, timedelta
+from urllib.parse import quote_plus
 
 # Function to create a SQLAlchemy database connection
 def create_engine():
-    database_url = "postgresql://postgres.kfuizzxktmneperhsekb:RDSO_Analytics_Change@2015@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+    password = quote_plus("RDSO_Analytics_Change@2015")  # URL encode the password
+    user = "postgres.kfuizzxktmneperhsekb"
+    host = "aws-0-ap-southeast-1.pooler.supabase.com"
+    port = "5432"
+    dbname = "postgres"
+    database_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
     engine = sqlalchemy.create_engine(database_url)
     return engine
 
-# Updated caching function using st.cache_resource
 @st.cache_resource
 def get_data(_engine, start_date, end_date):
     # Formatted SQL query to fetch all relevant data between two dates
