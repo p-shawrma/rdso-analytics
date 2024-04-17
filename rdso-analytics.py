@@ -74,6 +74,10 @@ def process_data(df):
     # Static EMA for voltage
     df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
+    # Calculate average pack temperature from all cell temperature columns
+    cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
+    df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
+
     # Define conditions and choices for states
     epsilon = 0.2
     conditions = [
