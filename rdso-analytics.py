@@ -79,8 +79,7 @@ def main():
         fetch_button = st.button("Fetch Data")
 
     if fetch_button:
-        engine = create_engine()
-        df = get_data(engine, start_date, end_date)
+        df = get_data(start_date, end_date)  # Directly calling the function without passing the engine
         if not df.empty:
             processed_df = process_data(df)
             cycle_number = st.sidebar.selectbox("Select Discharge Cycle", processed_df['cycle'].unique())
