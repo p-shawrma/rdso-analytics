@@ -23,7 +23,9 @@ def get_data(_engine, start_date, end_date):
     FROM public.custom_report_rdso
     WHERE created_at BETWEEN %s AND %s;
     """
-    df = pd.read_sql_query(query, _engine, params=[start_date, end_date])
+    # Ensure the parameters are in tuple form
+    params = (start_date, end_date)  # Pack parameters into a tuple
+    df = pd.read_sql_query(query, _engine, params=params)
     return df
 
 def process_data(df):
