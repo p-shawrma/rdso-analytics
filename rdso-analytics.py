@@ -41,24 +41,37 @@ def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
+    
+    # Smoothing current with exponential moving average
+    smoothing_factor = 1/3  # Forgetting factor
+    df['smoothed_current'] = df['Battery_Pack_Current(A)'].ewm(alpha=smoothing_factor).mean()
 
-    # Identify discharge periods and positive pulses
-    df['discharge'] = df['Battery_Pack_Current(A)'] < 0
-    df['pos_current'] = df['Battery_Pack_Current(A)'] > 0
-    df['pos_duration'] = df['pos_current'] * df['time_diff']
-    df['pos_pulse'] = df['pos_duration'].rolling(window=3).sum()
+    # Identifying continuous pulses
+    df['charge'] = df['smoothed_current'] > 0
+    df['discharge'] = df['smoothed_current'] < 0
+    df['idle'] = df['smoothed_current'] == 0
+    
+    # Identify sustained periods by cumulatively summing the boolean flags and then taking the diff
+    df['charge_stint'] = (df['charge'] != df['charge'].shift()).cumsum()
+    df['discharge_stint'] = (df['discharge'] != df['discharge'].shift()).cumsum()
+    
+    # Filter out short stints
+    charge_durations = df[df['charge']].groupby('charge_stint')['time_diff'].sum()
+    discharge_durations = df[df['discharge']].groupby('discharge_stint')['time_diff'].sum()
+    
+    valid_charge_stints = charge_durations[charge_durations > 60].index
+    valid_discharge_stints = discharge_durations[discharge_durations > 60].index
+    
+    df['valid_charge'] = df['charge_stint'].isin(valid_charge_stints)
+    df['valid_discharge'] = df['discharge_stint'].isin(valid_discharge_stints)
+    
+    # Count stints
+    df['charge_stint_count'] = df['valid_charge'].cumsum()
+    df['discharge_stint_count'] = df['valid_discharge'].cumsum()
 
-    df['pos_pulse'] = (df['pos_pulse'] < 30) & df['pos_current']
-
-    # Smoothing voltage to identify voltage drops
+    # The smoothed voltage logic remains the same if needed
     df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].rolling(window=5, center=True).mean()
-    df['voltage_change'] = df['smoothed_voltage'].diff()
-    df['discharge_start'] = (df['discharge'] == True) & (df['discharge'].shift(1) == False)
-    df['discharge_end'] = (df['discharge'] == False) & (df['discharge'].shift(1) == True)
-
-    # Tagging cycles
-    df['cycle'] = df['discharge_start'].cumsum()
-
+    
     return df
 
 def main():
