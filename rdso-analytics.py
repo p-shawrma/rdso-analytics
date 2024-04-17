@@ -12,36 +12,45 @@ def create_connection():
         port="5432"
     )
 
-def fetch_data():
+# Function to fetch data from the database
+def fetch_data(start_date, end_date):
     with create_connection() as conn:
         query = """
-        SELECT created_at, "Battery_Pack_Voltage(V)", "Battery_Pack_Current(A)"
-        FROM public.custom_report_rdso
-        LIMIT 10;
+        SELECT * FROM public.custom_report_rdso
+        WHERE created_at BETWEEN %s AND %s;
         """
-        df = pd.read_sql_query(query, conn)
+        # Convert dates to datetime at the start of the start_date and the end of the end_date
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.max.time())
+
+        # Print the datetime parameters to debug
+        print("Fetching data between:", start_datetime, "and", end_datetime)
+
+        # Fetch data using a DataFrame
+        df = pd.read_sql_query(query, conn, params=[start_datetime, end_datetime])
     return df
 
-# Example usage within a Streamlit app:
-import streamlit as st
-
+# Main function to run the Streamlit app
 def main():
-    st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
+    st.set_page_config(layout="wide", page_title="Battery Discharge Analysis Dashboard")
 
+    # Sidebar for user inputs
     with st.sidebar:
-        st.title("Filter Settings")
-        start_date = st.date_input("Start date", datetime.now().date())
+        st.title("Data Filter Settings")
+        start_date = st.date_input("Start date", datetime.now().date() - timedelta(days=7))
         end_date = st.date_input("End date", datetime.now().date())
         if start_date > end_date:
             st.error("End date must be after start date.")
         fetch_button = st.button("Fetch Data")
 
+    # Data fetching and display
     if fetch_button:
-        df = fetch_data()
+        df = fetch_data(start_date, end_date)
         if not df.empty:
+            st.write("Data fetched successfully.")
             st.dataframe(df)
         else:
-            st.write("No data found for the selected date range.")
+            st.error("No data found for the selected date range.")
 
 if __name__ == "__main__":
     main()
