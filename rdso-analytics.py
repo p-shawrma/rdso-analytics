@@ -24,6 +24,11 @@ def fetch_data(start_date, end_date):
         # Convert dates to datetime at the start of the start_date and the end of the end_date
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(end_date, datetime.max.time())
+        
+        # Debug: print or log the datetime values
+        print("Start datetime:", start_datetime)
+        print("End datetime:", end_datetime)
+
         df = pd.read_sql_query(query, conn, params=[start_datetime, end_datetime])
     return df
 
