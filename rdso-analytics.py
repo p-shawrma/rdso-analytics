@@ -3,14 +3,14 @@ import pandas as pd
 import sqlalchemy
 from datetime import datetime, timedelta
 
-# Define a function to create a SQLAlchemy database connection
+# Function to create a SQLAlchemy database connection
 def create_engine():
     database_url = "postgresql://postgres.kfuizzxktmneperhsekb:RDSO_Analytics_Change@2015@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
     engine = sqlalchemy.create_engine(database_url)
     return engine
 
 # Updated caching function using st.cache_data
-@st.cache_data(ttl=600, suppress_st_warning=True)
+@st.experimental_singleton()
 def get_data(start_date, end_date, engine):
     # Formatted SQL query to fetch all relevant data between two dates
     query = """
