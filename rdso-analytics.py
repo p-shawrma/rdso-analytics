@@ -16,17 +16,33 @@ def create_engine():
     return engine
 
 @st.cache_resource
+# ...
+
+@st.cache(allow_output_mutation=True, show_spinner=False)
 def get_data(_engine, start_date, end_date):
-    # Formatted SQL query to fetch all relevant data between two dates
-    query = """
-    SELECT *
-    FROM public.custom_report_rdso
-    WHERE created_at BETWEEN %s AND %s;
-    """
-    # Ensure the parameters are in tuple form
-    params = (start_date, end_date)  # Pack parameters into a tuple
-    df = pd.read_sql_query(query, _engine, params=params)
-    return df
+    try:
+        # Adjusted SQL query to fetch all relevant data between two dates
+        query = """
+        SELECT *
+        FROM public.custom_report_rdso
+        WHERE created_at BETWEEN %s AND %s;
+        """
+        # Convert to string to prevent timezone issues
+        start_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"Querying data between {start_str} and {end_str}")
+        
+        df = pd.read_sql_query(query, _engine, params=[start_str, end_str])
+        if df.empty:
+            st.warning("Query successful but no data returned.")
+        return df
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        return pd.DataFrame()
+
+# Main function and other components remain the same
+# ...
+
 
 def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
