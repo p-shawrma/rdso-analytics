@@ -42,33 +42,40 @@ def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
+    
+    # Handle the first time_diff NaN
+    df['time_diff'].fillna(method='bfill', inplace=True)
 
-    # Base alpha for an expected time difference, e.g., 1 second
+    # Base alpha for an expected time difference, e.g., 10 seconds
     base_time_diff = 10  # Base time difference in seconds
-    base_alpha = 0.2    # You can adjust this based on your expected decay rate
+    base_alpha = 0.2    # Base alpha for smoothing
 
     # Adjust alpha based on actual time difference
-    # If the time difference is less, increase alpha (more weight to recent value)
-    # If the time difference is more, decrease alpha (less weight to recent value)
-    df['alpha'] = base_alpha / df['time_diff'] * base_time_diff
+    # Protect against division by zero just in case
+    df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
     df['alpha'] = df['alpha'].clip(upper=1)  # Ensure alpha does not exceed 1
 
+    # Initialize the first current to the first actual current reading
+    ema_current = df['Battery_Pack_Current(A)'].iloc[0]
+    smoothed_currents = [ema_current]
+
     # Apply dynamic EMA
-    # We use the `apply` method to calculate a weighted mean iteratively
-    ema_current = 0
-    smoothed_currents = []
-    for i, row in df.iterrows():
-        ema_current = ema_current * (1 - row['alpha']) + row['Battery_Pack_Current(A)'] * row['alpha']
+    for i in range(1, len(df)):
+        alpha = df['alpha'].iloc[i]
+        current = df['Battery_Pack_Current(A)'].iloc[i]
+        ema_current = ema_current * (1 - alpha) + current * alpha
         smoothed_currents.append(ema_current)
+
     df['smoothed_current'] = smoothed_currents
 
-    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()  # Static EMA for voltage
+    # Static EMA for voltage
+    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
-    # Define conditions and choices as before
+    # Define conditions and choices for states
     epsilon = 0.1
     conditions = [
-        df['smoothed_current'] > epsilon,  # Charging condition
-        df['smoothed_current'] < -epsilon, # Discharging condition
+        df['smoothed_current'] > epsilon,   # Charging condition
+        df['smoothed_current'] < -epsilon,  # Discharging condition
         abs(df['smoothed_current']) <= epsilon  # Idle condition
     ]
     choices = ['charge', 'discharge', 'idle']
