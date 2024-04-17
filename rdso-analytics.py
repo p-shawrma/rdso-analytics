@@ -65,7 +65,7 @@ def process_data(df):
     # Use np.select to apply conditions and choices to the dataframe
     df['state'] = np.select(conditions, choices, default='idle')
 
-    return valid_stints_df
+    return df
 
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
