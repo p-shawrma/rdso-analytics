@@ -50,8 +50,8 @@ def process_data(df):
     df['time_diff'].fillna(method='bfill', inplace=True)
 
     # Base alpha for an expected time difference, e.g., 10 seconds
-    base_time_diff = 5  # Base time difference in seconds
-    base_alpha = 0.3    # Base alpha for smoothing
+    base_time_diff = 10  # Base time difference in seconds
+    base_alpha = 0.4    # Base alpha for smoothing
 
     # Adjust alpha based on actual time difference
     # Protect against division by zero just in case
