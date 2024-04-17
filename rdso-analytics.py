@@ -41,38 +41,43 @@ def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
-    
-    # Smoothing current with exponential moving average
-    smoothing_factor = 1/3  # Forgetting factor
-    df['smoothed_current'] = df['Battery_Pack_Current(A)'].ewm(alpha=smoothing_factor).mean()
 
-    # Identifying continuous pulses
-    df['charge'] = df['smoothed_current'] > 0
-    df['discharge'] = df['smoothed_current'] < 0
-    df['idle'] = df['smoothed_current'] == 0
-    
-    # Identify sustained periods by cumulatively summing the boolean flags and then taking the diff
-    df['charge_stint'] = (df['charge'] != df['charge'].shift()).cumsum()
-    df['discharge_stint'] = (df['discharge'] != df['discharge'].shift()).cumsum()
-    
-    # Filter out short stints
-    charge_durations = df[df['charge']].groupby('charge_stint')['time_diff'].sum()
-    discharge_durations = df[df['discharge']].groupby('discharge_stint')['time_diff'].sum()
-    
-    valid_charge_stints = charge_durations[charge_durations > 60].index
-    valid_discharge_stints = discharge_durations[discharge_durations > 60].index
-    
-    df['valid_charge'] = df['charge_stint'].isin(valid_charge_stints)
-    df['valid_discharge'] = df['discharge_stint'].isin(valid_discharge_stints)
-    
-    # Count stints
-    df['charge_stint_count'] = df['valid_charge'].cumsum()
-    df['discharge_stint_count'] = df['valid_discharge'].cumsum()
+    # Smoothing current and voltage with exponential moving average
+    forgetting_factor = 3
+    alpha = 2 / (forgetting_factor + 1)
+    df['smoothed_current'] = df['Battery_Pack_Current(A)'].ewm(alpha=alpha).mean()
+    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=alpha).mean()
 
-    # The smoothed voltage logic remains the same if needed
-    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].rolling(window=5, center=True).mean()
-    
-    return df
+    # Define conditions for charging, discharging, and idle states
+    conditions = [
+        df['smoothed_current'] > 0,  # Charging condition
+        df['smoothed_current'] < 0,  # Discharging condition
+        df['smoothed_current'] == 0  # Idle condition
+    ]
+
+    # Define the choice for each condition
+    choices = ['charge', 'discharge', 'idle']
+
+    # Use np.select to apply conditions and choices to the dataframe
+    df['state'] = np.select(conditions, choices, default='idle')
+
+    # Identifying continuous stints
+    df['stint_id'] = (df['state'] != df['state'].shift()).cumsum()
+
+    # Identifying the duration of each stint
+    df['stint_duration'] = df.groupby('stint_id')['time_diff'].transform('sum')
+
+    # Determining if the stint is valid based on its duration
+    df['stint_valid'] = df['stint_duration'] > 60
+
+    # Creating a filtered dataframe with valid stints only
+    valid_stints_df = df[df['stint_valid']].copy()
+
+    # Counting valid discharge and charge stints
+    valid_stints_df['discharge_stint_count'] = (valid_stints_df['state'] == 'discharge').cumsum()
+    valid_stints_df['charge_stint_count'] = (valid_stints_df['state'] == 'charge').cumsum()
+
+    return valid_stints_df
 
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
