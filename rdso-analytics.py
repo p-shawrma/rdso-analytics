@@ -49,11 +49,14 @@ def process_data(df):
     df['smoothed_current'] = df['Battery_Pack_Current(A)'].ewm(alpha=alpha).mean()
     df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=alpha).mean()
 
+    # Define a small epsilon for zero current tolerance
+    epsilon = 0.001  # Adjust this value based on what you consider 'effectively zero'
+
     # Define conditions for charging, discharging, and idle states
     conditions = [
-        df['smoothed_current'] > 0,  # Charging condition
-        df['smoothed_current'] < 0,  # Discharging condition
-        df['smoothed_current'] == 0  # Idle condition
+        df['smoothed_current'] > epsilon,   # Charging condition
+        df['smoothed_current'] < -epsilon,  # Discharging condition
+        abs(df['smoothed_current']) <= epsilon  # Idle condition
     ]
 
     # Define the choice for each condition
@@ -61,22 +64,6 @@ def process_data(df):
 
     # Use np.select to apply conditions and choices to the dataframe
     df['state'] = np.select(conditions, choices, default='idle')
-
-    # Identifying continuous stints
-    df['stint_id'] = (df['state'] != df['state'].shift()).cumsum()
-
-    # Identifying the duration of each stint
-    df['stint_duration'] = df.groupby('stint_id')['time_diff'].transform('sum')
-
-    # Determining if the stint is valid based on its duration
-    df['stint_valid'] = df['stint_duration'] > 60
-
-    # Creating a filtered dataframe with valid stints only
-    valid_stints_df = df[df['stint_valid']].copy()
-
-    # Counting valid discharge and charge stints
-    valid_stints_df['discharge_stint_count'] = (valid_stints_df['state'] == 'discharge').cumsum()
-    valid_stints_df['charge_stint_count'] = (valid_stints_df['state'] == 'charge').cumsum()
 
     return valid_stints_df
 
