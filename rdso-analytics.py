@@ -54,60 +54,6 @@ def process_data(df):
     base_alpha = 0.2    # Base alpha for smoothing
 
     # Adjust alpha based on actual time difference
-    # Protect against division by zero just in case
-    df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-    df['alpha'] = df['alpha'].clip(upper=0.4)  # Ensure alpha does not exceed 1
-
-    # Initialize the first current to the first actual current reading
-    ema_current = df['Battery_Pack_Current(A)'].iloc[0]
-    smoothed_currents = [ema_current]
-
-    # Apply dynamic EMA
-    for i in range(1, len(df)):
-        alpha = df['alpha'].iloc[i]
-        current = df['Battery_Pack_Current(A)'].iloc[i]
-        ema_current = ema_current * (1 - alpha) + current * alpha
-        smoothed_currents.append(ema_current)
-
-    df['smoothed_current'] = smoothed_currents
-
-    # Static EMA for voltage
-    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
-
-    # Calculate average pack temperature from all cell temperature columns
-    cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
-    df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
-
-    # Define conditions and choices for states
-    epsilon = 0.2
-    conditions = [
-        df['smoothed_current'] > epsilon,   # Charging condition
-        df['smoothed_current'] < -epsilon,  # Discharging condition
-        abs(df['smoothed_current']) <= epsilon  # Idle condition
-    ]
-    choices = ['charge', 'discharge', 'idle']
-    df['state'] = np.select(conditions, choices, default='idle')
-
-    return df
-def calculate_percentile(n):
-    def percentile_(x):
-        return np.percentile(x, n)
-    percentile_.__name__ = 'percentile_%s' % n
-    return percentile_
-
-def process_data(df):
-    df['timestamp'] = pd.to_datetime(df['created_at'])
-    df = df.sort_values(by='timestamp')
-    df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
-    
-    # Handle the first time_diff NaN
-    df['time_diff'].fillna(method='bfill', inplace=True)
-
-    # Base alpha for an expected time difference, e.g., 10 seconds
-    base_time_diff = 10  # Base time difference in seconds
-    base_alpha = 0.2    # Base alpha for smoothing
-
-    # Adjust alpha based on actual time difference
     df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
     df['alpha'] = df['alpha'].clip(upper=0.4)  # Ensure alpha does not exceed 0.4
 
@@ -149,6 +95,37 @@ def process_data(df):
     df['filtered_state'].fillna(method='ffill', inplace=True)
 
     return df
+    
+def calculate_percentile(n):
+    def percentile_(x):
+        return np.percentile(x, n)
+    percentile_.__name__ = 'percentile_%s' % n
+    return percentile_
+
+def process_grouped_data(df):
+    # Group by continuous states and apply calculations
+    grouped = df.groupby((df['state'] != df['state'].shift()).cumsum())
+    result = grouped.agg(
+        start_timestamp=('timestamp', 'min'),
+        end_timestamp=('timestamp', 'max'),
+        step_type=('state', 'first'),
+        duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
+        soc_start=('SOC(%)', 'first'),
+        soc_end=('SOC(%)', 'last'),
+        voltage_start=('Battery_Pack_Voltage(V)', 'first'),
+        voltage_end=('Battery_Pack_Voltage(V)', 'last'),
+        average_current=('Battery_Pack_Current(A)', 'mean'),
+        median_current=('Battery_Pack_Current(A)', 'median'),
+        min_current=('Battery_Pack_Current(A)', 'min'),
+        max_current=('Battery_Pack_Current(A)', 'max'),
+        current_25th=('Battery_Pack_Current(A)', calculate_percentile(25)),
+        current_75th=('Battery_Pack_Current(A)', calculate_percentile(75)),
+        median_max_cell_temperature=('Max_Cell_Temp_(C)', 'median'),
+        median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
+        median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
+    )
+    return result
+
 def plot_data(df):
     # Create traces for the smoothed current and voltage
     trace1 = go.Scatter(
