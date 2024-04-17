@@ -1,7 +1,5 @@
-
 import streamlit as st
 import pandas as pd
-import numpy as np
 import psycopg2
 from datetime import datetime, timedelta
 
@@ -17,7 +15,7 @@ def get_data(start_date, end_date):
     ) as conn:
         # Formatted SQL query to fetch all relevant data between two dates
         query = """
-        SELECT created_at, "Battery_Pack_Current(A)", "Battery_Pack_Voltage(V)"
+        SELECT *
         FROM public.custom_report_rdso
         WHERE created_at BETWEEN %s AND %s;
         """
@@ -25,6 +23,9 @@ def get_data(start_date, end_date):
     return df
 
 def process_data(df):
+    # Check the format of 'created_at'
+    st.write("Sample data to check 'created_at' format:", df[['created_at']].head())
+
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
@@ -59,14 +60,12 @@ def main():
 
         if start_date > end_date:
             st.error("End date must be after start date.")
-        else:
-            fetch_button = st.button("Fetch Data")
+        fetch_button = st.button("Fetch Data")
 
-    if 'fetch_button' in st.session_state and st.session_state.fetch_button:
+    if fetch_button:
         df = get_data(start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
-            st.write("Filtered Data:")
             cycle_number = st.sidebar.selectbox("Select Discharge Cycle", processed_df['cycle'].unique())
             filtered_data = processed_df[processed_df['cycle'] == cycle_number]
             st.dataframe(filtered_data[['timestamp', 'Battery_Pack_Current(A)', 'Battery_Pack_Voltage(V)', 'smoothed_voltage', 'discharge', 'pos_pulse', 'cycle']])
@@ -75,4 +74,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
