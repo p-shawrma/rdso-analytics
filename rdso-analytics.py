@@ -37,7 +37,7 @@ def main():
         fetch_button = st.button("Fetch Data")
 
     if fetch_button:
-        df = fetch_data(start_date, end_date)
+        df = fetch_data()
         if not df.empty:
             st.dataframe(df)
         else:
