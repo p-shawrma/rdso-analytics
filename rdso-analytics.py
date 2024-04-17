@@ -9,16 +9,16 @@ def create_engine():
     engine = sqlalchemy.create_engine(database_url)
     return engine
 
-# Updated caching function using st.cache_data
-@st.experimental_singleton()
-def get_data(start_date, end_date, engine):
+# Updated caching function using st.cache_resource
+@st.cache_resource
+def get_data(_engine, start_date, end_date):
     # Formatted SQL query to fetch all relevant data between two dates
     query = """
     SELECT *
     FROM public.custom_report_rdso
     WHERE created_at BETWEEN %s AND %s;
     """
-    df = pd.read_sql_query(query, engine, params=[start_date, end_date])
+    df = pd.read_sql_query(query, _engine, params=[start_date, end_date])
     return df
 
 def process_data(df):
@@ -60,7 +60,7 @@ def main():
 
     if fetch_button:
         engine = create_engine()
-        df = get_data(start_date, end_date, engine)
+        df = get_data(engine, start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
             cycle_number = st.sidebar.selectbox("Select Discharge Cycle", processed_df['cycle'].unique())
