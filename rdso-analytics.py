@@ -1,31 +1,27 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
+import sqlalchemy
 from datetime import datetime, timedelta
 
-# Function to create a database connection
-@st.cache(ttl=600, suppress_st_warning=True)
-def get_data(start_date, end_date):
-    with psycopg2.connect(
-        dbname="postgres",
-        user="postgres.kfuizzxktmneperhsekb",  # Replace with your username
-        password="RDSO_Analytics_Change@2015",  # Replace with your password
-        host="aws-0-ap-southeast-1.pooler.supabase.com",  # Replace with your host
-        port="5432"
-    ) as conn:
-        # Formatted SQL query to fetch all relevant data between two dates
-        query = """
-        SELECT *
-        FROM public.custom_report_rdso
-        WHERE created_at BETWEEN %s AND %s;
-        """
-        df = pd.read_sql_query(query, conn, params=[start_date, end_date])
+# Define a function to create a SQLAlchemy database connection
+def create_engine():
+    database_url = "postgresql://postgres.kfuizzxktmneperhsekb:RDSO_Analytics_Change@2015@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+    engine = sqlalchemy.create_engine(database_url)
+    return engine
+
+# Updated caching function using st.cache_data
+@st.cache_data(ttl=600, suppress_st_warning=True)
+def get_data(start_date, end_date, engine):
+    # Formatted SQL query to fetch all relevant data between two dates
+    query = """
+    SELECT *
+    FROM public.custom_report_rdso
+    WHERE created_at BETWEEN %s AND %s;
+    """
+    df = pd.read_sql_query(query, engine, params=[start_date, end_date])
     return df
 
 def process_data(df):
-    # Check the format of 'created_at'
-    st.write("Sample data to check 'created_at' format:", df[['created_at']].head())
-
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
@@ -34,7 +30,7 @@ def process_data(df):
     df['discharge'] = df['Battery_Pack_Current(A)'] < 0
     df['pos_current'] = df['Battery_Pack_Current(A)'] > 0
     df['pos_duration'] = df['pos_current'] * df['time_diff']
-    df['pos_pulse'] = df['pos_duration'].rolling(window=3).sum()  # Adjust based on actual data frequency
+    df['pos_pulse'] = df['pos_duration'].rolling(window=3).sum()
 
     df['pos_pulse'] = (df['pos_pulse'] < 30) & df['pos_current']
 
@@ -63,7 +59,8 @@ def main():
         fetch_button = st.button("Fetch Data")
 
     if fetch_button:
-        df = get_data(start_date, end_date)
+        engine = create_engine()
+        df = get_data(start_date, end_date, engine)
         if not df.empty:
             processed_df = process_data(df)
             cycle_number = st.sidebar.selectbox("Select Discharge Cycle", processed_df['cycle'].unique())
