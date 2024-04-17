@@ -50,7 +50,7 @@ def process_data(df):
     df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=alpha).mean()
 
     # Define a small epsilon for zero current tolerance
-    epsilon = 0.001  # Adjust this value based on what you consider 'effectively zero'
+    epsilon = 0.1  # Adjust this value based on what you consider 'effectively zero'
 
     # Define conditions for charging, discharging, and idle states
     conditions = [
