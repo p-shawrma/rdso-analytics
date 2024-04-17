@@ -48,7 +48,7 @@ def process_data(df):
 
     # Base alpha for an expected time difference, e.g., 10 seconds
     base_time_diff = 10  # Base time difference in seconds
-    base_alpha = 0.2    # Base alpha for smoothing
+    base_alpha = 0.5    # Base alpha for smoothing
 
     # Adjust alpha based on actual time difference
     # Protect against division by zero just in case
