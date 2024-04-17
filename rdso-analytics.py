@@ -75,7 +75,7 @@ def process_data(df):
     df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
     # Define conditions and choices for states
-    epsilon = 0.1
+    epsilon = 0.2
     conditions = [
         df['smoothed_current'] > epsilon,   # Charging condition
         df['smoothed_current'] < -epsilon,  # Discharging condition
