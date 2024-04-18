@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 
 # Function to create a database connection using psycopg2
-@st.cache(allow_output_mutation=True, ttl=600, show_spinner=False)
+@st.cache(allow_output_mutation=True, ttl=6000, show_spinner=False)
 def get_data(start_date, end_date):
     user = "postgres.kfuizzxktmneperhsekb"
     password = "RDSO_Analytics_Change@2015"
@@ -112,14 +112,14 @@ def process_grouped_data(df):
         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
         soc_start=('SOC(%)', 'first'),
         soc_end=('SOC(%)', 'last'),
-        voltage_start=('Battery_Pack_Voltage(V)', 'first'),
-        voltage_end=('Battery_Pack_Voltage(V)', 'last'),
-        average_current=('Battery_Pack_Current(A)', 'mean'),
-        median_current=('Battery_Pack_Current(A)', 'median'),
-        min_current=('Battery_Pack_Current(A)', 'min'),
-        max_current=('Battery_Pack_Current(A)', 'max'),
-        current_25th=('Battery_Pack_Current(A)', calculate_percentile(25)),
-        current_75th=('Battery_Pack_Current(A)', calculate_percentile(75)),
+        voltage_start=('smoothed_voltage(V)', 'first'),
+        voltage_end=('smoothed_voltage(V)', 'last'),
+        average_current=('smoothed_current', 'mean'),
+        median_current=('smoothed_current', 'median'),
+        min_current=('smoothed_current', 'min'),
+        max_current=('smoothed_current', 'max'),
+        current_25th=('smoothed_current', calculate_percentile(25)),
+        current_75th=('smoothed_current', calculate_percentile(75)),
         median_max_cell_temperature=('Max_Cell_Temp_(C)', 'median'),
         median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
         median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
