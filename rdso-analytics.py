@@ -68,10 +68,10 @@ def process_data(df):
         ema_current = ema_current * (1 - alpha) + current * alpha
         smoothed_currents.append(ema_current)
 
-    df['smoothed_current'] = smoothed_currents
+    df['Fitted_Current(A)'] = smoothed_currents
 
     # Static EMA for voltage
-    df['smoothed_voltage'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
+    df['Fitted_Voltage(V)'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
     # Calculate average pack temperature from all cell temperature columns
     cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
@@ -80,9 +80,9 @@ def process_data(df):
     # Define conditions and choices for states
     epsilon = 0.2
     conditions = [
-        df['smoothed_current'] > epsilon,   # Charging condition
-        df['smoothed_current'] < -epsilon,  # Discharging condition
-        abs(df['smoothed_current']) <= epsilon  # Idle condition
+        df['Fitted_Current(A)'] > epsilon,   # Charging condition
+        df['Fitted_Current(A)'] < -epsilon,  # Discharging condition
+        abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
     ]
     choices = ['charge', 'discharge', 'idle']
     df['state'] = np.select(conditions, choices, default='idle')
@@ -112,14 +112,14 @@ def process_grouped_data(df):
         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
         soc_start=('SOC(%)', 'first'),
         soc_end=('SOC(%)', 'last'),
-        voltage_start=('smoothed_voltage(V)', 'first'),
-        voltage_end=('smoothed_voltage(V)', 'last'),
-        average_current=('smoothed_current', 'mean'),
-        median_current=('smoothed_current', 'median'),
-        min_current=('smoothed_current', 'min'),
-        max_current=('smoothed_current', 'max'),
-        current_25th=('smoothed_current', calculate_percentile(25)),
-        current_75th=('smoothed_current', calculate_percentile(75)),
+        voltage_start=('Fitted_Voltage(V)', 'first'),
+        voltage_end=('Fitted_Voltage(V)', 'last'),
+        average_current=('Fitted_Current(A)', 'mean'),
+        median_current=('Fitted_Current(A)', 'median'),
+        min_current=('Fitted_Current(A)', 'min'),
+        max_current=('Fitted_Current(A)', 'max'),
+        current_25th=('Fitted_Current(A)', calculate_percentile(25)),
+        current_75th=('Fitted_Current(A)', calculate_percentile(75)),
         median_max_cell_temperature=('Max_Cell_Temp_(C)', 'median'),
         median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
         median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
@@ -130,7 +130,7 @@ def plot_data(df):
     # Create traces for the smoothed current and voltage
     trace1 = go.Scatter(
         x=df['timestamp'],
-        y=df['smoothed_current'],
+        y=df['Fitted_Current(A)'],
         mode='lines',
         name='Smoothed Current (A)',
         line=dict(color='red')
@@ -138,7 +138,7 @@ def plot_data(df):
     
     trace2 = go.Scatter(
         x=df['timestamp'],
-        y=df['smoothed_voltage'],
+        y=df['Fitted_Voltage(V)'],
         mode='lines',
         name='Smoothed Voltage (V)',
         line=dict(color='blue'),
