@@ -51,11 +51,11 @@ def process_data(df):
 
     # Base alpha for an expected time difference, e.g., 10 seconds
     base_time_diff = 10  # Base time difference in seconds
-    base_alpha = 0.3    # Base alpha for smoothing
+    base_alpha = 0.1    # Base alpha for smoothing
 
     # Adjust alpha based on actual time difference
     df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-    df['alpha'] = df['alpha'].clip(upper=0.4)  # Ensure alpha does not exceed 0.45
+    df['alpha'] = df['alpha'].clip(upper=0.3)  # Ensure alpha does not exceed 0.45
 
     # Initialize the first current to the first actual current reading
     ema_current = df['Battery_Pack_Current(A)'].iloc[0]
@@ -94,7 +94,7 @@ def process_data(df):
     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
     grp = df.groupby('state_change')
     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-    df['filtered_state'] = np.where(df['state_duration'] <= 15, np.nan, df['state'])
+    df['filtered_state'] = np.where(df['state_duration'] <= 150, np.nan, df['state'])
     df['filtered_state'].fillna(method='ffill', inplace=True)
 
     return df
