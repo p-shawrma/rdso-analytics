@@ -258,6 +258,36 @@ def plot_temp(df):
     
     fig = go.Figure(data=[trace1, trace2], layout=layout)
     return fig
+
+def calculate_midpoint(row):
+    return row['start_timestamp'] + (row['end_timestamp'] - row['start_timestamp']) / 2
+
+def plot_discharge_currents(df):
+    # Calculate the midpoint timestamp for each row
+    df['mid_timestamp'] = df.apply(calculate_midpoint, axis=1)
+
+    # Filter to keep only discharge states
+    discharge_df = df[df['step_type'] == 'discharge']
+
+    # Create a candlestick chart
+    fig = go.Figure(data=[go.Candlestick(
+        x=discharge_df['mid_timestamp'],
+        open=discharge_df['current_25th'],
+        high=discharge_df['max_current'],
+        low=discharge_df['min_current'],
+        close=discharge_df['current_75th'],
+        increasing_line_color='green', decreasing_line_color='red'
+    )])
+
+    fig.update_layout(
+        title='Current Distribution in Discharge States',
+        xaxis_title='Time',
+        yaxis_title='Current (A)',
+        xaxis_rangeslider_visible=False
+    )
+    
+    return fig
+
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
 
@@ -288,6 +318,8 @@ def main():
             st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
             st.write("Grouped Data Overview:")
             st.dataframe(grouped_df)  # Display the grouped data
+            fig = plot_discharge_currents(grouped_df)
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.write("No data found for the selected date range.")
 
