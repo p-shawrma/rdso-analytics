@@ -104,11 +104,11 @@ def calculate_percentile(n):
 
 def process_grouped_data(df):
     # Group by continuous states and apply calculations
-    grouped = df.groupby((df['state'] != df['state'].shift()).cumsum())
+    grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
     result = grouped.agg(
         start_timestamp=('timestamp', 'min'),
         end_timestamp=('timestamp', 'max'),
-        step_type=('state', 'first'),
+        step_type=('filtered_state', 'first'),
         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
         soc_start=('SOC(%)', 'first'),
         soc_end=('SOC(%)', 'last'),
