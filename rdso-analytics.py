@@ -55,7 +55,7 @@ def process_data(df):
 
     # Adjust alpha based on actual time difference
     df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-    df['alpha'] = df['alpha'].clip(upper=0.1)  # Ensure alpha does not exceed 0.45
+    df['alpha'] = df['alpha'].clip(upper=1)  # Ensure alpha does not exceed 0.45
 
     # Initialize the first current to the first actual current reading
     ema_current = df['Battery_Pack_Current(A)'].iloc[0]
