@@ -102,6 +102,7 @@ def calculate_percentile(n):
     percentile_.__name__ = 'percentile_%s' % n
     return percentile_
 
+
 def process_grouped_data(df):
     # Group by continuous states and apply calculations
     grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
@@ -124,6 +125,13 @@ def process_grouped_data(df):
         median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
         median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
     )
+    
+    # Calculate the 'date' from 'start_timestamp'
+    result['date'] = result['start_timestamp'].dt.date
+    
+    # Calculate the change in SOC
+    result['change_in_soc'] = result['soc_end'] - result['soc_start']
+    
     return result
 
 def plot_current_voltage(df):
