@@ -303,6 +303,54 @@ def plot_discharge_currents(df):
     )
     
     return fig
+def create_day_wise_summary(df):
+    # Filter the DataFrame for discharge and charge states
+    discharge = df[df['step_type'] == 'discharge']
+    charge = df[df['step_type'] == 'charge']
+
+    # Aggregate the data by date
+    discharge_summary = discharge.groupby('date').agg({
+        'change_in_soc': 'sum',
+        'duration_minutes': ['min', 'max', 'median', calculate_percentile(25), calculate_percentile(75)]
+    })
+    charge_summary = charge.groupby('date').agg({
+        'change_in_soc': 'sum'
+    })
+
+    # Rename multi-level columns after aggregation
+    discharge_summary.columns = ['_'.join(col).strip() for col in discharge_summary.columns.values]
+    charge_summary.columns = ['total_charge_soc']
+
+    # Merge summaries
+    day_wise_summary = pd.merge(discharge_summary, charge_summary, on='date', how='outer')
+    day_wise_summary.rename(columns={
+        'change_in_soc_sum': 'total_discharge_soc',
+        'duration_minutes_min': 'discharge_time_min',
+        'duration_minutes_max': 'discharge_time_max',
+        'duration_minutes_median': 'discharge_time_median',
+        'duration_minutes_percentile_25': 'discharge_time_25th',
+        'duration_minutes_percentile_75': 'discharge_time_75th'
+    }, inplace=True)
+
+    return day_wise_summary
+
+def plot_discharge_duration_candlestick(df):
+    fig = go.Figure(data=[go.Candlestick(
+        x=df.index,
+        open=df['discharge_time_25th'],
+        high=df['discharge_time_max'],
+        low=df['discharge_time_min'],
+        close=df['discharge_time_75th'],
+        increasing_line_color='green', decreasing_line_color='red'
+    )])
+
+    fig.update_layout(
+        title='Candlestick Plot of Discharge Durations',
+        xaxis_title='Date',
+        yaxis_title='Duration in Minutes',
+        xaxis_rangeslider_visible=False
+    )
+    return fig
 
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
@@ -335,6 +383,9 @@ def main():
             st.write("Grouped Data Overview:")
             st.dataframe(grouped_df)  # Display the grouped data
             fig = plot_discharge_currents(grouped_df)
+            st.plotly_chart(fig, use_container_width=True)
+            summary_df = create_day_wise_summary(grouped_df)
+            fig = plot_discharge_duration_candlestick(summary_df)
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.write("No data found for the selected date range.")
