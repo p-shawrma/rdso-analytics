@@ -126,7 +126,7 @@ def process_grouped_data(df):
     )
     return result
 
-def plot_data(df):
+def plot_current_voltage(df):
     # Create traces for the smoothed current and voltage
     trace1 = go.Scatter(
         x=df['timestamp'],
@@ -166,7 +166,98 @@ def plot_data(df):
         margin=dict(l=20, r=20, t=40, b=20),  # Reduces margins to make use of available space
     )
     return fig
+def plot_current_soc(df):
+    # Create traces
+    trace1 = go.Scatter(
+        x=df['timestamp'],
+        y=df['Fitted_Current(A)'],
+        mode='lines',
+        name='Current (A)',
+        line=dict(color='red')
+    )
+    trace2 = go.Scatter(
+        x=df['timestamp'],
+        y=df['SOC(%)'],
+        mode='lines',
+        name='SOC (%)',
+        line=dict(color='green'),
+        yaxis='y2'
+    )
 
+    # Layout with dual-axis configuration
+    layout = go.Layout(
+        title='Current and SOC Over Time',
+        xaxis=dict(title='Timestamp'),
+        yaxis=dict(title='Current (A)'),
+        yaxis2=dict(
+            title='SOC (%)',
+            overlaying='y',
+            side='right'
+        )
+    )
+    
+    fig = go.Figure(data=[trace1, trace2], layout=layout)
+    return fig
+
+def plot_voltage_soc(df):
+    # Create traces
+    trace1 = go.Scatter(
+        x=df['timestamp'],
+        y=df['Fitted_Voltage(V)'],
+        mode='lines',
+        name='Voltage (V)',
+        line=dict(color='blue')
+    )
+    trace2 = go.Scatter(
+        x=df['timestamp'],
+        y=df['SOC(%)'],
+        mode='lines',
+        name='SOC (%)',
+        line=dict(color='green'),
+        yaxis='y2'
+    )
+
+    # Layout with dual-axis configuration
+    layout = go.Layout(
+        title='Voltage and SOC Over Time',
+        xaxis=dict(title='Timestamp'),
+        yaxis=dict(title='Voltage (V)'),
+        yaxis2=dict(
+            title='SOC (%)',
+            overlaying='y',
+            side='right'
+        )
+    )
+    
+    fig = go.Figure(data=[trace1, trace2], layout=layout)
+    return fig
+
+def plot_temp(df):
+    # Create traces
+    trace1 = go.Scatter(
+        x=df['timestamp'],
+        y=df['Max_Cell_Temp_(C)'],
+        mode='lines',
+        name='Max Cell Temp (C)',
+        line=dict(color='orange')
+    )
+    trace2 = go.Scatter(
+        x=df['timestamp'],
+        y=df['Min_Cell_Temp_(C)'],
+        mode='lines',
+        name='Min Cell Temp (C)',
+        line=dict(color='purple')
+    )
+
+    # Layout
+    layout = go.Layout(
+        title='Max and Min Cell Temperatures Over Time',
+        xaxis=dict(title='Timestamp'),
+        yaxis=dict(title='Temperature (C)')
+    )
+    
+    fig = go.Figure(data=[trace1, trace2], layout=layout)
+    return fig
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
 
@@ -187,7 +278,13 @@ def main():
             grouped_df = process_grouped_data(processed_df)
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
-            fig = plot_data(processed_df)
+            fig = plot_current_voltage(processed_df)
+            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
+            fig = plot_current_soc(processed_df)
+            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
+            fig = plot_voltage_soc(processed_df)
+            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
+            fig = plot_temp(processed_df)
             st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
             st.write("Grouped Data Overview:")
             st.dataframe(grouped_df)  # Display the grouped data
