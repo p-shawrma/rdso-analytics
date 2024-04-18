@@ -94,7 +94,7 @@ def process_data(df):
     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
     grp = df.groupby('state_change')
     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-    df['filtered_state'] = np.where(df['state_duration'] <= 120, np.nan, df['state'])
+    df['filtered_state'] = np.where(df['state_duration'] <= 30, np.nan, df['state'])
     df['filtered_state'].fillna(method='ffill', inplace=True)
 
     return df
