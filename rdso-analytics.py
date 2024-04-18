@@ -73,6 +73,9 @@ def process_data(df):
     # Static EMA for voltage
     df['Fitted_Voltage(V)'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
+    # Calculate voltage increase
+    df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.02
+
     # Calculate average pack temperature from all cell temperature columns
     cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
     df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
@@ -80,8 +83,8 @@ def process_data(df):
     # Define conditions and choices for states
     epsilon = 0.2
     conditions = [
-        df['Fitted_Current(A)'] > epsilon,   # Charging condition
-        df['Fitted_Current(A)'] < -epsilon,  # Discharging condition
+        df['voltage_increase'],  # Charging condition based on voltage increase
+        (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
         abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
     ]
     choices = ['charge', 'discharge', 'idle']
