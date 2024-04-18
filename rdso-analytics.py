@@ -132,7 +132,7 @@ def plot_data(df):
         x=df['timestamp'],
         y=df['Fitted_Current(A)'],
         mode='lines',
-        name='Smoothed Current (A)',
+        name='Current (A)',
         line=dict(color='red')
     )
     
@@ -140,18 +140,18 @@ def plot_data(df):
         x=df['timestamp'],
         y=df['Fitted_Voltage(V)'],
         mode='lines',
-        name='Smoothed Voltage (V)',
+        name='Voltage (V)',
         line=dict(color='blue'),
         yaxis='y2'
     )
     
     # Layout with dual-axis configuration
     layout = go.Layout(
-        title='Smoothed Current and Voltage Over Time',
+        title='Current and Voltage Over Time',
         xaxis=dict(title='Timestamp'),
-        yaxis=dict(title='Smoothed Current (A)'),
+        yaxis=dict(title='Current (A)'),
         yaxis2=dict(
-            title='Smoothed Voltage (V)',
+            title='Voltage (V)',
             overlaying='y',
             side='right'
         ),
