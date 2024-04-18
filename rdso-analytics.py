@@ -132,6 +132,14 @@ def process_grouped_data(df):
     # Calculate the change in SOC
     result['change_in_soc'] = result['soc_end'] - result['soc_start']
     
+    # Reorder columns to place 'date' just before 'start_timestamp' and 'change_in_soc' just after 'soc_end'
+    columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
+                       'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
+                       'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
+                       'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
+
+    result = result.reindex(columns=columns_ordered)
+    
     return result
 
 def plot_current_voltage(df):
