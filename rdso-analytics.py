@@ -51,7 +51,7 @@ def process_data(df):
 
     # Base alpha for an expected time difference, e.g., 10 seconds
     base_time_diff = 10  # Base time difference in seconds
-    base_alpha = 0.66    # Base alpha for smoothing
+    base_alpha = 0.33    # Base alpha for smoothing
 
     # Adjust alpha based on actual time difference
     df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
@@ -94,8 +94,8 @@ def process_data(df):
     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
     grp = df.groupby('state_change')
     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-    df['filtered_state'] = np.where(df['state_duration'] <= 150, np.nan, df['state'])
-    df['filtered_state'].fillna(method='ffill', inplace=True)
+    df['filtered_state'] = np.where(df['state_duration'] <= 120, np.nan, df['state'])
+    df['filtered_state'].fillna(method='bfill', inplace=True)
 
     return df
     
