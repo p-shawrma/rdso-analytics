@@ -3,9 +3,7 @@ import pandas as pd
 import psycopg2
 import numpy as np
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-
 
 # Function to create a database connection using psycopg2
 @st.cache(allow_output_mutation=True, ttl=6000, show_spinner=False)
@@ -98,15 +96,16 @@ def process_data(df):
     df['filtered_state'].fillna(method='bfill', inplace=True)
 
     return df
-    
+
 def calculate_percentile(n):
+    """Utility function to create a percentile function for aggregation."""
     def percentile_(x):
         return np.percentile(x, n)
     percentile_.__name__ = 'percentile_%s' % n
     return percentile_
 
-
 def process_grouped_data(df):
+    """Processes grouped data to extract meaningful statistics for each continuous state segment."""
     # Group by continuous states and apply calculations
     grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
     result = grouped.agg(
@@ -116,14 +115,14 @@ def process_grouped_data(df):
         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
         soc_start=('SOC(%)', 'first'),
         soc_end=('SOC(%)', 'last'),
-        voltage_start=('Battery_Pack_Voltage(V)', 'first'),
-        voltage_end=('Battery_Pack_Voltage(V)', 'last'),
-        average_current=('Battery_Pack_Current(A)', 'mean'),
-        median_current=('Battery_Pack_Current(A)', 'median'),
-        min_current=('Battery_Pack_Current(A)', calculate_percentile(10)),
-        max_current=('Battery_Pack_Current(A)', calculate_percentile(90)),
-        current_25th=('Battery_Pack_Current(A)', calculate_percentile(25)),
-        current_75th=('Battery_Pack_Current(A)', calculate_percentile(75)),
+        voltage_start=('Fitted_Voltage(V)', 'first'),
+        voltage_end=('Fitted_Voltage(V)', 'last'),
+        average_current=('Fitted_Current(A)', 'mean'),
+        median_current=('Fitted_Current(A)', 'median'),
+        min_current=('Fitted_Current(A)', calculate_percentile(10)),
+        max_current=('Fitted_Current(A)', calculate_percentile(90)),
+        current_25th=('Fitted_Current(A)', calculate_percentile(25)),
+        current_75th=('Fitted_Current(A)', calculate_percentile(75)),
         median_max_cell_temperature=('Max_Cell_Temp_(C)', 'median'),
         median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
         median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
@@ -145,136 +144,57 @@ def process_grouped_data(df):
     
     return result
 
+def apply_filters(df):
+    # Retrieve user-selected step types from the sidebar
+    step_types = df['step_type'].unique().tolist()
+    selected_types = st.sidebar.multiselect('Select Step Types', step_types, default=step_types)
+    filtered_df = df[df['step_type'].isin(selected_types)]
+    return filtered_df
+
+
 def plot_current_voltage(df):
-    # Create traces for the smoothed current and voltage
-    trace1 = go.Scatter(
-        x=df['timestamp'],
-        y=df['Fitted_Current(A)'],
-        mode='lines',
-        name='Current (A)',
-        line=dict(color='red')
-    )
-    
-    trace2 = go.Scatter(
-        x=df['timestamp'],
-        y=df['Fitted_Voltage(V)'],
-        mode='lines',
-        name='Voltage (V)',
-        line=dict(color='blue'),
-        yaxis='y2'
-    )
-    
-    # Layout with dual-axis configuration
+    trace1 = go.Scatter(x=df['timestamp'], y=df['Fitted_Current(A)'], mode='lines', name='Current (A)', line=dict(color='red'))
+    trace2 = go.Scatter(x=df['timestamp'], y=df['Fitted_Voltage(V)'], mode='lines', name='Voltage (V)', yaxis='y2', line=dict(color='blue'))
     layout = go.Layout(
         title='Current and Voltage Over Time',
         xaxis=dict(title='Timestamp'),
         yaxis=dict(title='Current (A)'),
-        yaxis2=dict(
-            title='Voltage (V)',
-            overlaying='y',
-            side='right'
-        ),
-        autosize=True,  # Enable autosize to fill the container width
-        template='plotly_white'  # Optional: use a Plotly theme for nicer styling
+        yaxis2=dict(title='Voltage (V)', overlaying='y', side='right'),
+        autosize=True,
+        template='plotly_white'
     )
-    
-    # Combine traces and layout into a figure
     fig = go.Figure(data=[trace1, trace2], layout=layout)
-    fig.update_layout(
-        autosize=True,  # Ensures that plot size adjusts based on the container size
-        margin=dict(l=20, r=20, t=40, b=20),  # Reduces margins to make use of available space
-    )
+    fig.update_layout(autosize=True, margin=dict(l=20, r=20, t=40, b=20))
     return fig
-def plot_current_soc(df):
-    # Create traces
-    trace1 = go.Scatter(
-        x=df['timestamp'],
-        y=df['Fitted_Current(A)'],
-        mode='lines',
-        name='Current (A)',
-        line=dict(color='red')
-    )
-    trace2 = go.Scatter(
-        x=df['timestamp'],
-        y=df['SOC(%)'],
-        mode='lines',
-        name='SOC (%)',
-        line=dict(color='green'),
-        yaxis='y2'
-    )
 
-    # Layout with dual-axis configuration
+def plot_current_soc(df):
+    trace1 = go.Scatter(x=df['timestamp'], y=df['Fitted_Current(A)'], mode='lines', name='Current (A)', line=dict(color='red'))
+    trace2 = go.Scatter(x=df['timestamp'], y=df['SOC(%)'], mode='lines', name='SOC (%)', yaxis='y2', line=dict(color='green'))
     layout = go.Layout(
         title='Current and SOC Over Time',
         xaxis=dict(title='Timestamp'),
         yaxis=dict(title='Current (A)'),
-        yaxis2=dict(
-            title='SOC (%)',
-            overlaying='y',
-            side='right'
-        )
+        yaxis2=dict(title='SOC (%)', overlaying='y', side='right')
     )
-    
     fig = go.Figure(data=[trace1, trace2], layout=layout)
     return fig
 
 def plot_voltage_soc(df):
-    # Create traces
-    trace1 = go.Scatter(
-        x=df['timestamp'],
-        y=df['Fitted_Voltage(V)'],
-        mode='lines',
-        name='Voltage (V)',
-        line=dict(color='blue')
-    )
-    trace2 = go.Scatter(
-        x=df['timestamp'],
-        y=df['SOC(%)'],
-        mode='lines',
-        name='SOC (%)',
-        line=dict(color='green'),
-        yaxis='y2'
-    )
-
-    # Layout with dual-axis configuration
+    trace1 = go.Scatter(x=df['timestamp'], y=df['Fitted_Voltage(V)'], mode='lines', name='Voltage (V)', line=dict(color='blue'))
+    trace2 = go.Scatter(x=df['timestamp'], y=df['SOC(%)'], mode='lines', name='SOC (%)', yaxis='y2', line=dict(color='green'))
     layout = go.Layout(
         title='Voltage and SOC Over Time',
         xaxis=dict(title='Timestamp'),
         yaxis=dict(title='Voltage (V)'),
-        yaxis2=dict(
-            title='SOC (%)',
-            overlaying='y',
-            side='right'
-        )
+        yaxis2=dict(title='SOC (%)', overlaying='y', side='right')
     )
-    
     fig = go.Figure(data=[trace1, trace2], layout=layout)
     return fig
 
 def plot_temp(df):
-    # Create traces
-    trace1 = go.Scatter(
-        x=df['timestamp'],
-        y=df['Max_Cell_Temp_(C)'],
-        mode='lines',
-        name='Max Cell Temp (C)',
-        line=dict(color='orange')
-    )
-    trace2 = go.Scatter(
-        x=df['timestamp'],
-        y=df['Min_Cell_Temp_(C)'],
-        mode='lines',
-        name='Min Cell Temp (C)',
-        line=dict(color='purple')
-    )
-
-    # Layout
-    layout = go.Layout(
-        title='Max and Min Cell Temperatures Over Time',
-        xaxis=dict(title='Timestamp'),
-        yaxis=dict(title='Temperature (C)')
-    )
-    
+    trace1 = go.Scatter(x=df['timestamp'], y=df['Max_Cell_Temp_(C)'], mode='lines', name='Max Cell Temp (C)', line=dict(color='orange'))
+    trace2 = go.Scatter(x=df['timestamp'], y=df['Min_Cell_Temp_(C)'], mode='lines', name='Min Cell Temp (C)', line=dict(color='purple'))
+    layout = go.Layout(title='Max and Min Cell Temperatures Over Time', xaxis=dict(title='Timestamp'), yaxis=dict(title='Temperature (C)'))
     fig = go.Figure(data=[trace1, trace2], layout=layout)
     return fig
 
@@ -282,13 +202,8 @@ def calculate_midpoint(row):
     return row['start_timestamp'] + (row['end_timestamp'] - row['start_timestamp']) / 2
 
 def plot_discharge_currents(df):
-    # Calculate the midpoint timestamp for each row
     df['mid_timestamp'] = df.apply(calculate_midpoint, axis=1)
-
-    # Filter to keep only discharge states
     discharge_df = df[df['step_type'] == 'discharge']
-
-    # Create a candlestick chart
     fig = go.Figure(data=[go.Candlestick(
         x=discharge_df['mid_timestamp'],
         open=discharge_df['current_25th'],
@@ -297,21 +212,12 @@ def plot_discharge_currents(df):
         close=discharge_df['current_75th'],
         increasing_line_color='green', decreasing_line_color='red'
     )])
-
-    fig.update_layout(
-        title='Current Distribution in Discharge States',
-        xaxis_title='Time',
-        yaxis_title='Current (A)',
-        xaxis_rangeslider_visible=False
-    )
-    
+    fig.update_layout(title='Current Distribution in Discharge States', xaxis_title='Time', yaxis_title='Current (A)', xaxis_rangeslider_visible=False)
     return fig
+
 def create_day_wise_summary(df):
-    # Filter the DataFrame for discharge and charge states
     discharge = df[df['step_type'] == 'discharge']
     charge = df[df['step_type'] == 'charge']
-
-    # Aggregate the data by date
     discharge_summary = discharge.groupby('date').agg({
         'change_in_soc': 'sum',
         'duration_minutes': ['min', 'max', 'median', calculate_percentile(25), calculate_percentile(75)]
@@ -319,12 +225,8 @@ def create_day_wise_summary(df):
     charge_summary = charge.groupby('date').agg({
         'change_in_soc': 'sum'
     })
-
-    # Rename multi-level columns after aggregation
     discharge_summary.columns = ['_'.join(col).strip() for col in discharge_summary.columns.values]
     charge_summary.columns = ['total_charge_soc']
-
-    # Merge summaries
     day_wise_summary = pd.merge(discharge_summary, charge_summary, on='date', how='outer')
     day_wise_summary.rename(columns={
         'change_in_soc_sum': 'total_discharge_soc',
@@ -334,7 +236,6 @@ def create_day_wise_summary(df):
         'duration_minutes_percentile_25': 'discharge_time_25th',
         'duration_minutes_percentile_75': 'discharge_time_75th'
     }, inplace=True)
-
     return day_wise_summary
 
 def plot_discharge_duration_candlestick(df):
@@ -346,13 +247,7 @@ def plot_discharge_duration_candlestick(df):
         close=df['discharge_time_75th'],
         increasing_line_color='green', decreasing_line_color='red'
     )])
-
-    fig.update_layout(
-        title='Candlestick Plot of Discharge Durations',
-        xaxis_title='Date',
-        yaxis_title='Duration in Minutes',
-        xaxis_rangeslider_visible=False
-    )
+    fig.update_layout(title='Candlestick Plot of Discharge Durations', xaxis_title='Date', yaxis_title='Duration in Minutes', xaxis_rangeslider_visible=False)
     return fig
 
 def main():
@@ -363,37 +258,57 @@ def main():
         st.title("Filter Settings")
         start_date = st.date_input("Start Date", datetime.now().date() - timedelta(days=7))
         end_date = st.date_input("End Date", datetime.now().date())
-
-        if start_date > end_date:
-            st.error("End date must be after start date.")
         fetch_button = st.button("Fetch Data")
 
-    if fetch_button:
+    # Initializing session state to manage data fetching
+    if 'data_loaded' not in st.session_state or fetch_button:
+        if start_date > end_date:
+            st.error("End date must be after start date.")
+            return
+        
         df = get_data(start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
             grouped_df = process_grouped_data(processed_df)
-            st.write("Data Overview:")
-            st.dataframe(processed_df)  # Display the entire dataframe
-            fig = plot_current_voltage(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            fig = plot_current_soc(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            fig = plot_voltage_soc(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            fig = plot_temp(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            st.write("Grouped Data Overview:")
-            st.dataframe(grouped_df)  # Display the grouped data
-            fig = plot_discharge_currents(grouped_df)
-            st.plotly_chart(fig, use_container_width=True)
-            summary_df = create_day_wise_summary(grouped_df)
-            st.write("Day-wise Summary:")
-            st.dataframe(summary_df)  # Display the grouped data
-            fig = plot_discharge_duration_candlestick(summary_df)
-            st.plotly_chart(fig, use_container_width=True)
+            st.session_state['processed_df'] = processed_df
+            st.session_state['grouped_df'] = grouped_df
+            st.session_state['data_loaded'] = True
         else:
             st.write("No data found for the selected date range.")
+            st.session_state['data_loaded'] = False
+
+    if st.session_state.get('data_loaded', False):
+        # Data overview
+        st.write("Data Overview:")
+        st.dataframe(st.session_state['processed_df'])
+
+        # Interactive plots
+        fig = plot_current_voltage(st.session_state['processed_df'])
+        st.plotly_chart(fig, use_container_width=True)
+
+        fig = plot_current_soc(st.session_state['processed_df'])
+        st.plotly_chart(fig, use_container_width=True)
+
+        fig = plot_voltage_soc(st.session_state['processed_df'])
+        st.plotly_chart(fig, use_container_width=True)
+
+        fig = plot_temp(st.session_state['processed_df'])
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Grouped data overview
+        st.write("Grouped Data Overview:")
+        st.dataframe(st.session_state['grouped_df'])
+
+        fig = plot_discharge_currents(st.session_state['grouped_df'])
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Day-wise summary and plots
+        summary_df = create_day_wise_summary(st.session_state['grouped_df'])
+        st.write("Day-wise Summary:")
+        st.dataframe(summary_df)
+
+        fig = plot_discharge_duration_candlestick(summary_df)
+        st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
