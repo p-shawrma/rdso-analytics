@@ -373,6 +373,22 @@ def main():
         if not df.empty:
             processed_df = process_data(df)
             grouped_df = process_grouped_data(processed_df)
+
+            # Adding step type filter
+            step_types = grouped_df['step_type'].unique()
+            selected_step_type = st.selectbox('Select Step Type', options=step_types)
+
+            # Adding duration_minutes slider filter
+            min_duration, max_duration = int(grouped_df['duration_minutes'].min()), int(grouped_df['duration_minutes'].max())
+            selected_duration_range = st.slider('Select Duration Range (minutes)', min_duration, max_duration, (min_duration, max_duration))
+
+            # Apply filters to the dataframe
+            filtered_df = grouped_df[
+                (grouped_df['step_type'] == selected_step_type) &
+                (grouped_df['duration_minutes'] >= selected_duration_range[0]) &
+                (grouped_df['duration_minutes'] <= selected_duration_range[1])
+            ]
+            
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
             fig = plot_current_voltage(processed_df)
