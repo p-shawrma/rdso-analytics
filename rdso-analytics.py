@@ -9,16 +9,6 @@ import plotly.graph_objects as go
 
 # Function to create a database connection using psycopg2
 @st.cache(allow_output_mutation=True, ttl=6000, show_spinner=False)
-
-def apply_filters(df, step_type, duration_range):
-    """Apply filters to the DataFrame based on step type and duration."""
-    return df[
-        (df['step_type'] == step_type) &
-        (df['duration_minutes'] >= duration_range[0]) &
-        (df['duration_minutes'] <= duration_range[1])
-    ]
-
-
 def get_data(start_date, end_date):
     user = "postgres.kfuizzxktmneperhsekb"
     password = "RDSO_Analytics_Change@2015"
@@ -34,7 +24,6 @@ def get_data(start_date, end_date):
         port=port
     ) as conn:
         cursor = conn.cursor()
-        # Using direct string formatting to ensure full-day coverage
         query = f"""
         SELECT *
         FROM public.custom_report_rdso
@@ -44,80 +33,44 @@ def get_data(start_date, end_date):
         records = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(records, columns=columns)
-        
-        # Log the query and the number of rows fetched
-        print(f"Executed query: {query}")
-        print(f"Number of rows fetched: {len(df)}")
-
-        return df
+    return df
 
 def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
-    
-    # Handle the first time_diff NaN
     df['time_diff'].fillna(method='bfill', inplace=True)
-
-    # Base alpha for an expected time difference, e.g., 10 seconds
-    base_time_diff = 10  # Base time difference in seconds
-    base_alpha = 0.33    # Base alpha for smoothing
-
-    # Adjust alpha based on actual time difference
-    df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-    df['alpha'] = df['alpha'].clip(upper=0.66)  # Ensure alpha does not exceed 0.45
-
-    # Initialize the first current to the first actual current reading
-    ema_current = df['Battery_Pack_Current(A)'].iloc[0]
-    smoothed_currents = [ema_current]
-
-    # Apply dynamic EMA for current
+    base_time_diff = 10
+    base_alpha = 0.33
+    df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha).clip(upper=0.66)
+    ema_current = [df['Battery_Pack_Current(A)'].iloc[0]]
     for i in range(1, len(df)):
         alpha = df['alpha'].iloc[i]
         current = df['Battery_Pack_Current(A)'].iloc[i]
-        ema_current = ema_current * (1 - alpha) + current * alpha
-        smoothed_currents.append(ema_current)
-
-    df['Fitted_Current(A)'] = smoothed_currents
-
-    # Static EMA for voltage
+        ema_current.append(ema_current[-1] * (1 - alpha) + current * alpha)
+    df['Fitted_Current(A)'] = ema_current
     df['Fitted_Voltage(V)'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
-
-    # Calculate voltage increase
     df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.02
-
-    # Calculate average pack temperature from all cell temperature columns
     cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
     df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
-
-    # Define conditions and choices for states
-    epsilon = 0.1
     conditions = [
-        df['voltage_increase'],  # Charging condition based on voltage increase
-        (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
-        abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
+        df['voltage_increase'],
+        (df['Fitted_Current(A)'] < -0.1) & (~df['voltage_increase']),
+        abs(df['Fitted_Current(A)']) <= 0.1
     ]
     choices = ['charge', 'discharge', 'idle']
     df['state'] = np.select(conditions, choices, default='idle')
-
-    # Group by state changes and filter short durations
     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
-    grp = df.groupby('state_change')
-    df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
+    df['state_duration'] = df.groupby('state_change')['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
     df['filtered_state'] = np.where(df['state_duration'] <= 30, np.nan, df['state'])
     df['filtered_state'].fillna(method='bfill', inplace=True)
-
     return df
-    
+
 def calculate_percentile(n):
     def percentile_(x):
         return np.percentile(x, n)
-    percentile_.__name__ = 'percentile_%s' % n
     return percentile_
-
-
 def process_grouped_data(df):
-    # Group by continuous states and apply calculations
     grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
     result = grouped.agg(
         start_timestamp=('timestamp', 'min'),
@@ -136,25 +89,17 @@ def process_grouped_data(df):
         current_75th=('Battery_Pack_Current(A)', calculate_percentile(75)),
         median_max_cell_temperature=('Max_Cell_Temp_(C)', 'median'),
         median_min_cell_temperature=('Min_Cell_Temp_(C)', 'median'),
-        median_pack_temperature=('Pack_Temperature_(C)', 'median')  # Assuming you calculate or have this column
+        median_pack_temperature=('Pack_Temperature_(C)', 'median')
     )
-    
-    # Calculate the 'date' from 'start_timestamp'
     result['date'] = result['start_timestamp'].dt.date
-    
-    # Calculate the change in SOC
     result['change_in_soc'] = result['soc_end'] - result['soc_start']
-    
-    # Reorder columns to place 'date' just before 'start_timestamp' and 'change_in_soc' just after 'soc_end'
     columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
-
     result = result.reindex(columns=columns_ordered)
-    
     return result
-
+    
 def plot_current_voltage(df):
     # Create traces for the smoothed current and voltage
     trace1 = go.Scatter(
@@ -364,57 +309,62 @@ def plot_discharge_duration_candlestick(df):
         xaxis_rangeslider_visible=False
     )
     return fig
-
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
-
-    # Sidebar for date input
     with st.sidebar:
         st.title("Filter Settings")
         start_date = st.date_input("Start Date", datetime.now().date() - timedelta(days=7))
         end_date = st.date_input("End Date", datetime.now().date())
-
         if start_date > end_date:
             st.error("End date must be after start date.")
         fetch_button = st.button("Fetch Data")
 
-    if fetch_button:
+    if fetch_button or 'data' not in st.session_state:
         df = get_data(start_date, end_date)
+        st.session_state['data'] = df
         if not df.empty:
             processed_df = process_data(df)
+            st.session_state['processed_data'] = processed_df
             grouped_df = process_grouped_data(processed_df)
-            
-            st.write("Data Overview:")
-            st.dataframe(processed_df)  # Display the entire dataframe
-            fig = plot_current_voltage(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            fig = plot_current_soc(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            fig = plot_voltage_soc(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            fig = plot_temp(processed_df)
-            st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
-            
-            # Filters for grouped data
-            step_types = grouped_df['step_type'].unique()
-            selected_step_type = st.selectbox('Select Step Type', options=step_types)
-
-            min_duration, max_duration = int(grouped_df['duration_minutes'].min()), int(grouped_df['duration_minutes'].max())
-            selected_duration_range = st.slider('Select Duration Range (minutes)', min_duration, max_duration, (min_duration, max_duration))
-
-            filtered_df = apply_filters(grouped_df, selected_step_type, selected_duration_range)
-            
-            st.write("Grouped Data Overview:")
-            st.dataframe(filtered_df)  # Display the grouped data
-            fig = plot_discharge_currents(filtered_df)
-            st.plotly_chart(fig, use_container_width=True)
-            summary_df = create_day_wise_summary(filtered_df)
-            st.write("Day-wise Summary:")
-            st.dataframe(summary_df)  # Display the grouped data
-            fig = plot_discharge_duration_candlestick(summary_df)
-            st.plotly_chart(fig, use_container_width=True)
+            st.session_state['grouped_data'] = grouped_df
         else:
             st.write("No data found for the selected date range.")
 
+    if 'grouped_data' in st.session_state:
+        grouped_df = st.session_state['grouped_data']
+        step_types = grouped_df['step_type'].dropna().unique().tolist()
+        selected_step_types = st.multiselect('Select Step Type(s)', options=step_types, default=step_types)
+        min_duration, max_duration = int(grouped_df['duration_minutes'].min()), int(grouped_df['duration_minutes'].max())
+        selected_duration_range = st.slider('Select Duration Range (minutes)', min_duration, max_duration, (min_duration, max_duration))
+        filtered_df = apply_filters(grouped_df, selected_step_types, selected_duration_range)
+        
+        st.write("Data Overview:")
+        st.dataframe(filtered_df)
+        
+        # Plotting
+        fig = plot_current_voltage(filtered_df)
+        st.plotly_chart(fig, use_container_width=True)
+        fig = plot_current_soc(filtered_df)
+        st.plotly_chart(fig, use_container_width=True)
+        fig = plot_voltage_soc(filtered_df)
+        st.plotly_chart(fig, use_container_width=True)
+        fig = plot_temp(filtered_df)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        fig = plot_discharge_currents(filtered_df)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        summary_df = create_day_wise_summary(filtered_df)
+        st.write("Day-wise Summary:")
+        st.dataframe(summary_df)
+        fig = plot_discharge_duration_candlestick(summary_df)
+        st.plotly_chart(fig, use_container_width=True)
+
+def apply_filters(df, step_types, duration_range):
+    if not step_types:
+        step_types = df['step_type'].unique()
+    return df[(df['step_type'].isin(step_types)) & (df['duration_minutes'] >= duration_range[0]) & (df['duration_minutes'] <= duration_range[1])]
+
 if __name__ == "__main__":
     main()
+
