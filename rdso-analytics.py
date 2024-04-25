@@ -9,6 +9,16 @@ import plotly.graph_objects as go
 
 # Function to create a database connection using psycopg2
 @st.cache(allow_output_mutation=True, ttl=6000, show_spinner=False)
+
+def apply_filters(df, step_type, duration_range):
+    """Apply filters to the DataFrame based on step type and duration."""
+    return df[
+        (df['step_type'] == step_type) &
+        (df['duration_minutes'] >= duration_range[0]) &
+        (df['duration_minutes'] <= duration_range[1])
+    ]
+
+
 def get_data(start_date, end_date):
     user = "postgres.kfuizzxktmneperhsekb"
     password = "RDSO_Analytics_Change@2015"
