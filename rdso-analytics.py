@@ -361,9 +361,8 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
 
 def apply_filters(df, step_types, duration_range):
-    if not step_types:
-        step_types = df['step_type'].unique()
-    return df[(df['step_type'].isin(step_types)) & (df['duration_minutes'] >= duration_range[0]) & (df['duration_minutes'] <= duration_range[1])]
+    filtered_df = df[(df['step_type'].isin(step_types)) & (df['duration_minutes'] >= duration_range[0]) & (df['duration_minutes'] <= duration_range[1])]
+    return filtered_df
 
 if __name__ == "__main__":
     main()
