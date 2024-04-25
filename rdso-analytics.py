@@ -258,46 +258,45 @@ def main():
         st.title("Filter Settings")
         start_date = st.date_input("Start Date", datetime.now().date() - timedelta(days=7))
         end_date = st.date_input("End Date", datetime.now().date())
-        fetch_button = st.button("Fetch Data")
-
-    # Fetch data on button press
-    if fetch_button or 'data_loaded' not in st.session_state:
         if start_date > end_date:
             st.error("End date must be after start date.")
             return
+        fetch_button = st.button("Fetch Data")
 
-        df = get_data(start_date, end_date)
-        if not df.empty:
-            processed_df = process_data(df)
-            grouped_df = process_grouped_data(processed_df)
-            st.session_state['processed_df'] = processed_df
-            st.session_state['grouped_df'] = grouped_df
-            st.session_state['data_loaded'] = True
-        else:
-            st.write("No data found for the selected date range.")
-            st.session_state['data_loaded'] = False
+        # Fetch data on button press
+        if fetch_button or 'data_loaded' not in st.session_state:
+            df = get_data(start_date, end_date)
+            if not df.empty:
+                processed_df = process_data(df)
+                grouped_df = process_grouped_data(processed_df)
+                st.session_state['processed_df'] = processed_df
+                st.session_state['grouped_df'] = grouped_df
+                st.session_state['data_loaded'] = True
+            else:
+                st.write("No data found for the selected date range in the sidebar.")
+                st.session_state['data_loaded'] = False
 
+        if st.session_state.get('data_loaded', False):
+            # Apply filters only if data is loaded
+            all_step_types = st.session_state['grouped_df']['step_type'].unique().tolist()
+            selected_step_types = st.multiselect('Select Step Type', all_step_types, default=all_step_types)
+
+            # Filtering logic for display in the main area
+            st.session_state['selected_step_types'] = selected_step_types
+
+            min_duration, max_duration = 0, 0
+            if selected_step_types:
+                filtered_df = st.session_state['grouped_df'][st.session_state['grouped_df']['step_type'].isin(selected_step_types)]
+                if not filtered_df.empty:
+                    min_duration, max_duration = filtered_df['duration_minutes'].agg(['min', 'max']).astype(int)
+            duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (min_duration, max_duration))
+            st.session_state['duration_range'] = duration_range
+
+    # Display in the main area
     if st.session_state.get('data_loaded', False):
-        # Initialize filters after data is loaded
-        all_step_types = st.session_state['grouped_df']['step_type'].unique().tolist()
-        selected_step_types = st.multiselect('Select Step Type', all_step_types, default=all_step_types)
+        filtered_df = st.session_state['grouped_df'][st.session_state['grouped_df']['step_type'].isin(st.session_state['selected_step_types'])]
+        filtered_df = filtered_df[(filtered_df['duration_minutes'] >= st.session_state['duration_range'][0]) & (filtered_df['duration_minutes'] <= st.session_state['duration_range'][1])]
 
-        # Filter the data based on step type selection
-        filtered_df = st.session_state['grouped_df'][st.session_state['grouped_df']['step_type'].isin(selected_step_types)]
-
-        # Update the duration slider based on filtered data
-        if not filtered_df.empty:
-            min_duration, max_duration = filtered_df['duration_minutes'].agg(['min', 'max'])
-            min_duration, max_duration = int(min_duration), int(max_duration)
-        else:
-            min_duration, max_duration = 0, 0  # Defaults when no data is available
-
-        duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (min_duration, max_duration))
-
-        # Apply the duration filter
-        filtered_df = filtered_df[(filtered_df['duration_minutes'] >= duration_range[0]) & (filtered_df['duration_minutes'] <= duration_range[1])]
-
-        # Display plots and data
         display_data_and_plots(filtered_df, st.session_state['processed_df'])
 
 def display_data_and_plots(filtered_df, processed_df):
