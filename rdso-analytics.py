@@ -373,21 +373,6 @@ def main():
         if not df.empty:
             processed_df = process_data(df)
             grouped_df = process_grouped_data(processed_df)
-
-            # Adding step type filter
-            step_types = grouped_df['step_type'].unique()
-            selected_step_type = st.selectbox('Select Step Type', options=step_types)
-
-            # Adding duration_minutes slider filter
-            min_duration, max_duration = int(grouped_df['duration_minutes'].min()), int(grouped_df['duration_minutes'].max())
-            selected_duration_range = st.slider('Select Duration Range (minutes)', min_duration, max_duration, (min_duration, max_duration))
-
-            # Apply filters to the dataframe
-            filtered_df = grouped_df[
-                (grouped_df['step_type'] == selected_step_type) &
-                (grouped_df['duration_minutes'] >= selected_duration_range[0]) &
-                (grouped_df['duration_minutes'] <= selected_duration_range[1])
-            ]
             
             st.write("Data Overview:")
             st.dataframe(processed_df)  # Display the entire dataframe
@@ -399,11 +384,21 @@ def main():
             st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
             fig = plot_temp(processed_df)
             st.plotly_chart(fig, use_container_width=True)  # Ensures that the plot stretches to the full container width
+            
+            # Filters for grouped data
+            step_types = grouped_df['step_type'].unique()
+            selected_step_type = st.selectbox('Select Step Type', options=step_types)
+
+            min_duration, max_duration = int(grouped_df['duration_minutes'].min()), int(grouped_df['duration_minutes'].max())
+            selected_duration_range = st.slider('Select Duration Range (minutes)', min_duration, max_duration, (min_duration, max_duration))
+
+            filtered_df = apply_filters(grouped_df, selected_step_type, selected_duration_range)
+            
             st.write("Grouped Data Overview:")
-            st.dataframe(grouped_df)  # Display the grouped data
-            fig = plot_discharge_currents(grouped_df)
+            st.dataframe(filtered_df)  # Display the grouped data
+            fig = plot_discharge_currents(filtered_df)
             st.plotly_chart(fig, use_container_width=True)
-            summary_df = create_day_wise_summary(grouped_df)
+            summary_df = create_day_wise_summary(filtered_df)
             st.write("Day-wise Summary:")
             st.dataframe(summary_df)  # Display the grouped data
             fig = plot_discharge_duration_candlestick(summary_df)
