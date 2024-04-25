@@ -253,19 +253,28 @@ def plot_discharge_duration_candlestick(df):
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
 
-    # Sidebar for date input
+    # Sidebar for date and filtering input
     with st.sidebar:
         st.title("Filter Settings")
         start_date = st.date_input("Start Date", datetime.now().date() - timedelta(days=7))
         end_date = st.date_input("End Date", datetime.now().date())
         fetch_button = st.button("Fetch Data")
 
-    # Initializing session state to manage data fetching
+        # Filters initialization after data is fetched
+        if 'grouped_df' in st.session_state:
+            # Multi-select for step type
+            all_step_types = st.session_state['grouped_df']['step_type'].unique().tolist()
+            selected_step_types = st.multiselect('Select Step Type', all_step_types, default=all_step_types)
+
+            # Slider for duration
+            min_duration, max_duration = st.session_state['grouped_df']['duration_minutes'].agg(['min', 'max'])
+            duration_range = st.slider("Select Duration Range (minutes)", int(min_duration), int(max_duration), (int(min_duration), int(max_duration)))
+
     if 'data_loaded' not in st.session_state or fetch_button:
         if start_date > end_date:
             st.error("End date must be after start date.")
             return
-        
+
         df = get_data(start_date, end_date)
         if not df.empty:
             processed_df = process_data(df)
@@ -278,6 +287,13 @@ def main():
             st.session_state['data_loaded'] = False
 
     if st.session_state.get('data_loaded', False):
+        # Applying the filters to grouped_df
+        filtered_df = st.session_state['grouped_df']
+        if 'selected_step_types' in locals():
+            filtered_df = filtered_df[filtered_df['step_type'].isin(selected_step_types)]
+        if 'duration_range' in locals():
+            filtered_df = filtered_df[(filtered_df['duration_minutes'] >= duration_range[0]) & (filtered_df['duration_minutes'] <= duration_range[1])]
+
         # Data overview
         st.write("Data Overview:")
         st.dataframe(st.session_state['processed_df'])
@@ -295,15 +311,15 @@ def main():
         fig = plot_temp(st.session_state['processed_df'])
         st.plotly_chart(fig, use_container_width=True)
 
-        # Grouped data overview
-        st.write("Grouped Data Overview:")
-        st.dataframe(st.session_state['grouped_df'])
+        # Grouped data overview with filters applied
+        st.write("Filtered Grouped Data Overview:")
+        st.dataframe(filtered_df)
 
-        fig = plot_discharge_currents(st.session_state['grouped_df'])
+        fig = plot_discharge_currents(filtered_df)
         st.plotly_chart(fig, use_container_width=True)
 
         # Day-wise summary and plots
-        summary_df = create_day_wise_summary(st.session_state['grouped_df'])
+        summary_df = create_day_wise_summary(filtered_df)
         st.write("Day-wise Summary:")
         st.dataframe(summary_df)
 
