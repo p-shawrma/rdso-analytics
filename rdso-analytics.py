@@ -216,26 +216,37 @@ def plot_discharge_currents(df):
     return fig
 
 def create_day_wise_summary(df):
+    # Filter the DataFrame for discharge and charge states
     discharge = df[df['step_type'] == 'discharge']
     charge = df[df['step_type'] == 'charge']
+
+    # Aggregate the data by date for discharge
     discharge_summary = discharge.groupby('date').agg({
         'change_in_soc': 'sum',
-        'duration_minutes': ['min', 'max', 'median', calculate_percentile(25), calculate_percentile(75)]
+        'duration_minutes': ['sum', 'min', 'max', 'median', calculate_percentile(25), calculate_percentile(75)]
     })
+
+    # Aggregate the data by date for charge
     charge_summary = charge.groupby('date').agg({
         'change_in_soc': 'sum'
     })
+
+    # Flatten the MultiIndex columns created by aggregation
     discharge_summary.columns = ['_'.join(col).strip() for col in discharge_summary.columns.values]
     charge_summary.columns = ['total_charge_soc']
+
+    # Merge discharge and charge summaries into a single DataFrame
     day_wise_summary = pd.merge(discharge_summary, charge_summary, on='date', how='outer')
     day_wise_summary.rename(columns={
         'change_in_soc_sum': 'total_discharge_soc',
+        'duration_minutes_sum': 'total_discharge_time',  # Added total discharge time
         'duration_minutes_min': 'discharge_time_min',
         'duration_minutes_max': 'discharge_time_max',
         'duration_minutes_median': 'discharge_time_median',
         'duration_minutes_percentile_25': 'discharge_time_25th',
         'duration_minutes_percentile_75': 'discharge_time_75th'
     }, inplace=True)
+
     return day_wise_summary
 
 def plot_discharge_duration_candlestick(df):
