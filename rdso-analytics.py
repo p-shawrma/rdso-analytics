@@ -302,12 +302,14 @@ def main():
             min_duration, max_duration = int(min_duration), int(max_duration)
         else:
             min_duration, max_duration = 0, 0  # Defaults when no data is available
-
-        duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (min_duration, max_duration))
-
+        
+        # Set the initial value of the slider to start at 10, or at the minimum value if it's higher than 10
+        initial_min_duration = max(10, min_duration)
+        
+        duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (initial_min_duration, max_duration))
+        
         # Apply the duration filter
         filtered_df = filtered_df[(filtered_df['duration_minutes'] >= duration_range[0]) & (filtered_df['duration_minutes'] <= duration_range[1])]
-
         # Display plots and data
         display_data_and_plots(filtered_df, st.session_state['processed_df'])
 
