@@ -337,7 +337,6 @@
 # if __name__ == "__main__":
 #     main()
 
-
 import streamlit as st
 import pandas as pd
 import psycopg2
@@ -435,6 +434,10 @@ def process_data(df):
     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
     df['filtered_state'] = np.where(df['state_duration'] <= 30, np.nan, df['state'])
     df['filtered_state'].fillna(method='bfill', inplace=True)
+
+    # Map filtered_state to numerical step types
+    state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
+    df['step_type'] = df['filtered_state'].map(state_mapping)
 
     return df
 
@@ -544,7 +547,7 @@ def calculate_midpoint(row):
 
 def plot_discharge_currents(df):
     df['mid_timestamp'] = df.apply(calculate_midpoint, axis=1)
-    discharge_df = df[df['step_type'] == 'discharge']
+    discharge_df = df[df['step_type'] == 1]
     fig = go.Figure(data=[go.Candlestick(
         x=discharge_df['mid_timestamp'],
         open=discharge_df['current_25th'],
@@ -558,8 +561,8 @@ def plot_discharge_currents(df):
 
 def create_day_wise_summary(df):
     # Filter the DataFrame for discharge and charge states
-    discharge = df[df['step_type'] == 'discharge']
-    charge = df[df['step_type'] == 'charge']
+    discharge = df[df['step_type'] == 1]
+    charge = df[df['step_type'] == 0]
 
     # Aggregate the data by date for discharge
     discharge_summary = discharge.groupby('date').agg({
@@ -655,7 +658,7 @@ def main():
         display_data_and_plots(filtered_df, st.session_state['processed_df'])
 
 def display_data_and_plots(filtered_df, processed_df):
-    # st.write("Data Overview:")
+    st.write("Data Overview:")
     # st.dataframe(processed_df)
     
     # PyG Walker for data exploration
@@ -686,4 +689,3 @@ def display_data_and_plots(filtered_df, processed_df):
 
 if __name__ == "__main__":
     main()
-
