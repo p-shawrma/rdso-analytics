@@ -4,6 +4,7 @@ import psycopg2
 import numpy as np
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+from pygwalker.api.streamlit import StreamlitRenderer
 
 # Function to create a database connection using psycopg2
 @st.cache(allow_output_mutation=True, ttl=6000, show_spinner=False)
