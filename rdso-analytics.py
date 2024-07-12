@@ -680,15 +680,15 @@ def display_data_and_plots(filtered_df, processed_df):
     # st.write("Filtered Grouped Data Overview:")
     # st.dataframe(filtered_df)
     
-    # fig = plot_discharge_currents(filtered_df)
-    # st.plotly_chart(fig, use_container_width=True)
+    fig = plot_discharge_currents(filtered_df)
+    st.plotly_chart(fig, use_container_width=True)
     
     # summary_df = create_day_wise_summary(filtered_df)
     # st.write("Day-wise Summary:")
     # st.dataframe(summary_df)
     
-    # fig = plot_discharge_duration_candlestick(summary_df)
-    # st.plotly_chart(fig, use_container_width=True)
+    fig = plot_discharge_duration_candlestick(summary_df)
+    st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
