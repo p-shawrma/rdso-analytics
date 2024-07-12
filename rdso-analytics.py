@@ -369,7 +369,7 @@ def main():
             min_duration, max_duration = 0, 0  # Defaults when no data is available
         
         # Set the initial value of the slider to start at 10, or at the minimum value if it's higher than 10
-        initial_min_duration = max(10, min_duration)
+        initial_min_duration = max(1, min_duration)
         
         duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (initial_min_duration, max_duration))
         
