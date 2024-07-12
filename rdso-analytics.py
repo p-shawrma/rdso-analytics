@@ -662,7 +662,7 @@ def main():
 
 def display_data_and_plots(filtered_df, processed_df):
     st.write("Data Overview:")
-    # st.dataframe(processed_df)
+    st.dataframe(processed_df)
     
     # PyG Walker for data exploration
     pyg_app = StreamlitRenderer(processed_df)
