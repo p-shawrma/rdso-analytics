@@ -39,6 +39,63 @@ def get_data(start_date, end_date):
 
         return df
 
+# def process_data(df):
+#     df['timestamp'] = pd.to_datetime(df['created_at'])
+#     df = df.sort_values(by='timestamp')
+#     df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
+    
+#     # Handle the first time_diff NaN
+#     df['time_diff'].fillna(method='bfill', inplace=True)
+
+#     # Base alpha for an expected time difference, e.g., 10 seconds
+#     base_time_diff = 10  # Base time difference in seconds
+#     base_alpha = 0.33    # Base alpha for smoothing
+
+#     # Adjust alpha based on actual time difference
+#     df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
+#     df['alpha'] = df['alpha'].clip(upper=0.66)  # Ensure alpha does not exceed 0.45
+
+#     # Initialize the first current to the first actual current reading
+#     ema_current = df['Battery_Pack_Current(A)'].iloc[0]
+#     smoothed_currents = [ema_current]
+
+#     # Apply dynamic EMA for current
+#     for i in range(1, len(df)):
+#         alpha = df['alpha'].iloc[i]
+#         current = df['Battery_Pack_Current(A)'].iloc[i]
+#         ema_current = ema_current * (1 - alpha) + current * alpha
+#         smoothed_currents.append(ema_current)
+
+#     df['Fitted_Current(A)'] = smoothed_currents
+
+#     # Static EMA for voltage
+#     df['Fitted_Voltage(V)'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
+
+#     # Calculate voltage increase
+#     df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.02
+
+#     # Calculate average pack temperature from all cell temperature columns
+#     cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
+#     df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
+
+#     # Define conditions and choices for states
+#     epsilon = 0.1
+#     conditions = [
+#         df['voltage_increase'],  # Charging condition based on voltage increase
+#         (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
+#         abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
+#     ]
+#     choices = ['charge', 'discharge', 'idle']
+#     df['state'] = np.select(conditions, choices, default='idle')
+
+#     # Group by state changes and filter short durations
+#     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
+#     grp = df.groupby('state_change')
+#     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
+#     df['filtered_state'] = np.where(df['state_duration'] <= 30, np.nan, df['state'])
+#     df['filtered_state'].fillna(method='bfill', inplace=True)
+
+#     return df
 def process_data(df):
     df['timestamp'] = pd.to_datetime(df['created_at'])
     df = df.sort_values(by='timestamp')
@@ -72,19 +129,22 @@ def process_data(df):
     df['Fitted_Voltage(V)'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
     # Calculate voltage increase
-    df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.02
+    df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.01
+        
+    # Calculate soc increase
+    df['soc_increase'] = df['SOC(%)'].diff() > 0.01
 
     # Calculate average pack temperature from all cell temperature columns
     cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
     df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
 
     # Define conditions and choices for states
-    epsilon = 0.1
+    epsilon = 0.05
     conditions = [
-        df['voltage_increase'],  # Charging condition based on voltage increase
-        (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
-        abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
-    ]
+            ( df['voltage_increase'] | df['soc_increase'] ) & (df['Fitted_Current(A)'] > epsilon),  # Charging condition
+            (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
+            abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
+        ]
     choices = ['charge', 'discharge', 'idle']
     df['state'] = np.select(conditions, choices, default='idle')
 
@@ -92,8 +152,12 @@ def process_data(df):
     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
     grp = df.groupby('state_change')
     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-    df['filtered_state'] = np.where(df['state_duration'] <= 30, np.nan, df['state'])
+    df['filtered_state'] = np.where(df['state_duration'] > 5, df['state'], np.nan)
     df['filtered_state'].fillna(method='bfill', inplace=True)
+
+    # Map filtered_state to numerical step types
+    state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
+    df['step_type'] = df['filtered_state'].map(state_mapping)
 
     return df
 
