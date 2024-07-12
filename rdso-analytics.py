@@ -424,7 +424,7 @@ def process_data(df):
     # Define conditions and choices for states
     epsilon = 0.05
     conditions = [
-        (df['voltage_increase'] | (df['SOC(%)'].diff() > 0)) & (df['Fitted_Current(A)'] > epsilon),  # Charging condition
+        ( (df['voltage_increase'] | df['soc_increase']) & (df['Fitted_Current(A)'] > epsilon),  # Charging condition
         (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
         abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
     ]
