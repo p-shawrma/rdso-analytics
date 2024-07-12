@@ -651,7 +651,7 @@ def main():
             min_duration, max_duration = 0, 0  # Defaults when no data is available
         
         # Set the initial value of the slider to start at 10, or at the minimum value if it's higher than 10
-        initial_min_duration = max(10, min_duration)
+        initial_min_duration = max(0, min_duration)
         
         duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (initial_min_duration, max_duration))
         
@@ -680,15 +680,15 @@ def display_data_and_plots(filtered_df, processed_df):
     # st.write("Filtered Grouped Data Overview:")
     # st.dataframe(filtered_df)
     
-    fig = plot_discharge_currents(filtered_df)
-    st.plotly_chart(fig, use_container_width=True)
+    # fig = plot_discharge_currents(filtered_df)
+    # st.plotly_chart(fig, use_container_width=True)
     
     summary_df = create_day_wise_summary(filtered_df)
     # st.write("Day-wise Summary:")
     # st.dataframe(summary_df)
     
-    fig = plot_discharge_duration_candlestick(summary_df)
-    st.plotly_chart(fig, use_container_width=True)
+    # fig = plot_discharge_duration_candlestick(summary_df)
+    # st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
