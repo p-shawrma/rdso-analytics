@@ -412,16 +412,19 @@ def process_data(df):
     df['Fitted_Voltage(V)'] = df['Battery_Pack_Voltage(V)'].ewm(alpha=base_alpha).mean()
 
     # Calculate voltage increase
-    df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.02
+    df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.01
+        
+    # Calculate soc increase
+    df['soc_increase'] = df['SOC(%)'].diff() > 0.01
 
     # Calculate average pack temperature from all cell temperature columns
     cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
     df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
 
     # Define conditions and choices for states
-    epsilon = 0.1
+    epsilon = 0.05
     conditions = [
-        df['voltage_increase'],  # Charging condition based on voltage increase
+        (df['voltage_increase'] | (df['SOC(%)'].diff() > 0)) & (df['Fitted_Current(A)'] > epsilon),  # Charging condition
         (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),  # Discharging condition
         abs(df['Fitted_Current(A)']) <= epsilon  # Idle condition
     ]
