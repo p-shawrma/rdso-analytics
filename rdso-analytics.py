@@ -435,7 +435,7 @@ def process_data(df):
     df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
     grp = df.groupby('state_change')
     df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-    df['filtered_state'] = np.where(df['state_duration'] > 10, df['state'], np.nan)
+    df['filtered_state'] = np.where(df['state_duration'] > 5, df['state'], np.nan)
     df['filtered_state'].fillna(method='bfill', inplace=True)
 
     # Map filtered_state to numerical step types
