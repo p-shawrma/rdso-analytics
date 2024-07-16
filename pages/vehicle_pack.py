@@ -26,7 +26,7 @@ def create_client():
 @st.cache_data(ttl=6000)
 def fetch_model_numbers_and_dates():
     client = create_client()
-    query = "SELECT DISTINCT Model_Numb, toStartOfDay(DeviceDate) as DeviceDate FROM custom_tracking"
+    query = "SELECT DISTINCT Model_Number, toStartOfDay(DeviceDate) as DeviceDate FROM custom_tracking"
     result = client.query(query)
     df = pd.DataFrame(result.result_rows, columns=result.column_names)
     return df
@@ -36,66 +36,237 @@ def fetch_model_numbers_and_dates():
 def fetch_data(model_numbers, start_date, end_date):
     client = create_client()
     model_numbers_str = ','.join([f"'{model}'" for model in model_numbers])
+    start_date = start_date.strftime('%Y-%m-%d %H:%M:%S')
+    end_date = end_date.strftime('%Y-%m-%d %H:%M:%S')
     query = f"""
     SELECT *
     FROM custom_tracking
-    WHERE Model_Numb IN ({model_numbers_str}) AND DeviceDate BETWEEN '{start_date}' AND '{end_date}';
+    WHERE Model_Number IN ({model_numbers_str}) AND DeviceDate BETWEEN '{start_date}' AND '{end_date}'
     """
     result = client.query(query)
     df = pd.DataFrame(result.result_rows, columns=result.column_names)
     return df
 
-# Function to process data
+
+
+# def process_data(df):
+#     grouped = df.groupby('Model_Number')
+#     processed_dfs = []
+
+#     for name, group in grouped:
+#         group['timestamp'] = pd.to_datetime(group['DeviceDate'])
+#         group = group.sort_values(by='timestamp')
+#         group['time_diff'] = group['timestamp'].diff().dt.total_seconds()
+
+#         group['time_diff'].fillna(method='bfill', inplace=True)
+
+#         base_time_diff = 10
+#         base_alpha = 0.33
+
+#         group['alpha'] = group['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
+#         group['alpha'] = group['alpha'].clip(upper=0.66)
+
+#         ema_current = group['BM_BattCurrent'].iloc[0]
+#         smoothed_currents = [ema_current]
+
+#         for i in range(1, len(group)):
+#             alpha = group['alpha'].iloc[i]
+#             current = group['BM_BattCurrent'].iloc[i]
+#             ema_current = ema_current * (1 - alpha) + current * alpha
+#             smoothed_currents.append(ema_current)
+
+#         group['Fitted_Current(A)'] = smoothed_currents
+#         group['Fitted_Voltage(V)'] = group['BM_BattVoltage'].ewm(alpha=base_alpha).mean()
+
+#         group['voltage_increase'] = group['Fitted_Voltage(V)'].diff() >= 0.05
+#         group['soc_increase'] = group['BM_SocPercent'].diff() >= 0.05
+
+#         cell_temp_columns = [col for col in group.columns if 'Cell_Temperature' in col]
+#         group['Pack_Temperature_(C)'] = group[cell_temp_columns].mean(axis=1)
+
+#         epsilon = 0.5
+#         conditions = [
+#             (group['Fitted_Current(A)'] > epsilon) | (group['voltage_increase'] | group['soc_increase']),
+#             (group['Fitted_Current(A)'] < -epsilon) & ~((group['voltage_increase']) | (group['soc_increase'])),
+#             abs(group['Fitted_Current(A)']) <= epsilon
+#         ]
+#         choices = ['charge', 'discharge', 'idle']
+#         group['state'] = np.select(conditions, choices, default='idle')
+
+#         group['state_change'] = (group['state'] != group['state'].shift(1)).cumsum()
+#         grp = group.groupby('state_change')
+#         group['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
+
+#         # Apply different duration thresholds based on the state
+#         group['filtered_state'] = np.where(
+#             (group['state'] == 'idle') & (group['state_duration'] > 600) | 
+#             (group['state'] != 'idle') & (group['state_duration'] > 60), 
+#             group['state'], 
+#             np.nan
+#         )
+        
+#         group['filtered_state'].fillna(method='ffill', inplace=True)
+
+#         state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
+#         group['step_type'] = group['filtered_state'].map(state_mapping)
+
+#         processed_dfs.append(group)
+
+#     return pd.concat(processed_dfs)
+
+# def process_data(df):
+#     grouped = df.groupby('Model_Number')
+#     processed_dfs = []
+
+#     for name, group in grouped:
+#         group['timestamp'] = pd.to_datetime(group['DeviceDate'])
+#         group = group.sort_values(by='timestamp')
+#         group['time_diff'] = group['timestamp'].diff().dt.total_seconds()
+
+#         group['time_diff'].fillna(method='bfill', inplace=True)
+
+#         base_time_diff = 10
+#         base_alpha = 0.33
+
+#         group['alpha'] = group['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
+#         group['alpha'] = group['alpha'].clip(upper=0.66)
+
+#         ema_current = group['BM_BattCurrent'].iloc[0]
+#         smoothed_currents = [ema_current]
+
+#         for i in range(1, len(group)):
+#             alpha = group['alpha'].iloc[i]
+#             current = group['BM_BattCurrent'].iloc[i]
+#             ema_current = ema_current * (1 - alpha) + current * alpha
+#             smoothed_currents.append(ema_current)
+
+#         group['Fitted_Current(A)'] = smoothed_currents
+#         group['Fitted_Voltage(V)'] = group['BM_BattVoltage'].ewm(alpha=base_alpha).mean()
+
+#         group['voltage_increase'] = group['Fitted_Voltage(V)'].diff() >= 0.05
+#         group['soc_increase'] = group['BM_SocPercent'].diff() >= 0.05
+
+#         cell_temp_columns = [col for col in group.columns if 'Cell_Temperature' in col]
+#         group['Pack_Temperature_(C)'] = group[cell_temp_columns].mean(axis=1)
+
+#         epsilon = 0.5
+#         conditions = [
+#             (group['Fitted_Current(A)'] > epsilon) | (group['voltage_increase'] | group['soc_increase']),
+#             (group['Fitted_Current(A)'] < -epsilon) & ~((group['voltage_increase']) | (group['soc_increase'])),
+#             abs(group['Fitted_Current(A)']) <= epsilon
+#         ]
+#         choices = ['charge', 'discharge', 'idle']
+#         group['state'] = np.select(conditions, choices, default='idle')
+
+#         group['state_change'] = (group['state'] != group['state'].shift(1)).cumsum()
+#         grp = group.groupby('state_change')
+#         group['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
+
+#         # Calculate SOC difference for each group
+#         group['soc_difference'] = grp['BM_SocPercent'].transform(lambda x: abs(x.iloc[0] - x.iloc[-1]))
+
+        # Apply different duration thresholds based on the state
+        # group['filtered_state'] = np.where(
+        #     ((group['state'] == 'idle') & (group['state_duration'] > 600)) | 
+        #     ((group['state'] != 'idle') & (group['state_duration'] > 30)), 
+        #     group['state'], 
+        #     np.nan
+        # )
+
+#         # Apply SOC difference logic for idle states
+#         group['filtered_state'] = np.where(
+#             (group['state'] == 'idle') & (group['soc_difference'] > 1), 
+#             np.nan, 
+#             group['filtered_state']
+#         )
+
+#         group['filtered_state'].fillna(method='ffill', inplace=True)
+
+#         state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
+#         group['step_type'] = group['filtered_state'].map(state_mapping)
+
+#         processed_dfs.append(group)
+
+#     return pd.concat(processed_dfs)
+
+
 def process_data(df):
-    df['timestamp'] = pd.to_datetime(df['DeviceDate'])
-    df = df.sort_values(by='timestamp')
-    df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
-    
-    df['time_diff'].fillna(method='bfill', inplace=True)
+    grouped = df.groupby('Model_Number')
+    processed_dfs = []
 
-    base_time_diff = 10
-    base_alpha = 0.33
+    for name, group in grouped:
+        group['timestamp'] = pd.to_datetime(group['DeviceDate'])
+        group = group.sort_values(by='timestamp')
+        group['time_diff'] = group['timestamp'].diff().dt.total_seconds()
 
-    df['alpha'] = df['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-    df['alpha'] = df['alpha'].clip(upper=0.66)
+        group['time_diff'].fillna(method='bfill', inplace=True)
 
-    ema_current = df['BM_BattCurrent'].iloc[0]
-    smoothed_currents = [ema_current]
+        base_time_diff = 10
+        base_alpha = 0.33
 
-    for i in range(1, len(df)):
-        alpha = df['alpha'].iloc[i]
-        current = df['BM_BattCurrent'].iloc[i]
-        ema_current = ema_current * (1 - alpha) + current * alpha
-        smoothed_currents.append(ema_current)
+        group['alpha'] = group['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
+        group['alpha'] = group['alpha'].clip(upper=0.66)
 
-    df['Fitted_Current(A)'] = smoothed_currents
-    df['Fitted_Voltage(V)'] = df['BM_BattVoltage'].ewm(alpha=base_alpha).mean()
+        ema_current = group['BM_BattCurrent'].iloc[0]
+        smoothed_currents = [ema_current]
 
-    df['voltage_increase'] = df['Fitted_Voltage(V)'].diff() > 0.01
-    df['soc_increase'] = df['BM_SocPercent'].diff() > 0.01
+        for i in range(1, len(group)):
+            alpha = group['alpha'].iloc[i]
+            current = group['BM_BattCurrent'].iloc[i]
+            ema_current = ema_current * (1 - alpha) + current * alpha
+            smoothed_currents.append(ema_current)
 
-    cell_temp_columns = [col for col in df.columns if 'Cell_Temperature' in col]
-    df['Pack_Temperature_(C)'] = df[cell_temp_columns].mean(axis=1)
+        group['Fitted_Current(A)'] = smoothed_currents
+        group['Fitted_Voltage(V)'] = group['BM_BattVoltage'].ewm(alpha=base_alpha).mean()
 
-    epsilon = 0.05
-    conditions = [
-        (df['voltage_increase'] | df['soc_increase']) & (df['Fitted_Current(A)'] > epsilon),
-        (df['Fitted_Current(A)'] < -epsilon) & (~df['voltage_increase']),
-        abs(df['Fitted_Current(A)']) <= epsilon
-    ]
-    choices = ['charge', 'discharge', 'idle']
-    df['state'] = np.select(conditions, choices, default='idle')
+        group['voltage_increase'] = group['Fitted_Voltage(V)'].diff() >= 0.05
+        group['soc_increase'] = group['BM_SocPercent'].diff() >= 0.05
 
-    df['state_change'] = (df['state'] != df['state'].shift(1)).cumsum()
-    grp = df.groupby('state_change')
-    df['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-    df['filtered_state'] = np.where(df['state_duration'] > 5, df['state'], np.nan)
-    df['filtered_state'].fillna(method='bfill', inplace=True)
+        cell_temp_columns = [col for col in group.columns if 'Cell_Temperature' in col]
+        group['Pack_Temperature_(C)'] = group[cell_temp_columns].mean(axis=1)
 
-    state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
-    df['step_type'] = df['filtered_state'].map(state_mapping)
+        epsilon = 0.5
+        conditions = [
+            (group['Fitted_Current(A)'] > epsilon) | (group['voltage_increase'] | group['soc_increase']),
+            (group['Fitted_Current(A)'] < -epsilon) & ~((group['voltage_increase']) | (group['soc_increase'])),
+            abs(group['Fitted_Current(A)']) <= epsilon
+        ]
+        choices = ['charge', 'discharge', 'idle']
+        group['state'] = np.select(conditions, choices, default='idle')
 
-    return df
+        group['state_change'] = (group['state'] != group['state'].shift(1)).cumsum()
+        grp = group.groupby('state_change')
+        group['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
+        group['soc_diff'] = grp['BM_SocPercent'].transform(lambda x: x.iloc[-1] - x.iloc[0])
+
+        # Applying the new condition for filtered state
+        
+        # Apply different duration thresholds based on the state
+        group['filtered_state'] = np.where(
+            ((group['state'] == 'idle') & (group['state_duration'] > 600)) | 
+            ((group['state'] != 'idle') & (group['state_duration'] > 30)), 
+            group['state'], 
+            np.nan
+        )
+        group['filtered_state'].fillna(method='ffill', inplace=True)
+
+        # Final state logic based on SOC difference and state duration
+        group['final_state'] = np.where(
+            (group['soc_diff'].abs() <= 1) & (group['filtered_state'] == 'charge'),
+            np.nan,
+            group['filtered_state']
+            
+        )
+        group['final_state'].fillna(method='ffill', inplace=True)
+
+        state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
+        group['step_type'] = group['final_state'].map(state_mapping)
+
+        processed_dfs.append(group)
+
+    return pd.concat(processed_dfs)
+
+
 
 def calculate_percentile(n):
     def percentile_(x):
@@ -103,12 +274,46 @@ def calculate_percentile(n):
     percentile_.__name__ = 'percentile_%s' % n
     return percentile_
 
+# def process_grouped_data(df):
+#     grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
+#     result = grouped.agg(
+#         start_timestamp=('timestamp', 'min'),
+#         end_timestamp=('timestamp', 'max'),
+#         step_type=('filtered_state', 'first'),
+#         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
+#         soc_start=('BM_SocPercent', 'first'),
+#         soc_end=('BM_SocPercent', 'last'),
+#         voltage_start=('Fitted_Voltage(V)', 'first'),
+#         voltage_end=('Fitted_Voltage(V)', 'last'),
+#         average_current=('Fitted_Current(A)', 'mean'),
+#         median_current=('Fitted_Current(A)', 'median'),
+#         min_current=('Fitted_Current(A)', calculate_percentile(10)),
+#         max_current=('Fitted_Current(A)', calculate_percentile(90)),
+#         current_25th=('Fitted_Current(A)', calculate_percentile(25)),
+#         current_75th=('Fitted_Current(A)', calculate_percentile(75)),
+#         median_max_cell_temperature=('Max_monomer_temperature', 'median'),
+#         median_min_cell_temperature=('Min_monomer_temperature', 'median'),
+#         median_pack_temperature=('Pack_Temperature_(C)', 'median')
+#     )
+
+#     result['date'] = result['start_timestamp'].dt.date
+#     result['change_in_soc'] = result['soc_end'] - result['soc_start']
+
+#     columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
+#                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
+#                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
+#                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
+
+#     result = result.reindex(columns=columns_ordered)
+    
+#     return result
+
 def process_grouped_data(df):
-    grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
+    grouped = df.groupby((df['final_state'] != df['final_state'].shift()).cumsum())
     result = grouped.agg(
         start_timestamp=('timestamp', 'min'),
         end_timestamp=('timestamp', 'max'),
-        step_type=('filtered_state', 'first'),
+        step_type=('final_state', 'first'),
         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
         soc_start=('BM_SocPercent', 'first'),
         soc_end=('BM_SocPercent', 'last'),
@@ -136,6 +341,7 @@ def process_grouped_data(df):
     result = result.reindex(columns=columns_ordered)
     
     return result
+
 
 def apply_filters(df):
     step_types = df['step_type'].unique().tolist()
@@ -194,7 +400,7 @@ def calculate_midpoint(row):
 
 def plot_discharge_currents(df):
     df['mid_timestamp'] = df.apply(calculate_midpoint, axis=1)
-    discharge_df = df[df['step_type'] == 'discharge']
+    discharge_df = df[df['step_type'] == 'discharge']  # Discharge step type
     fig = go.Figure(data=[go.Candlestick(
         x=discharge_df['mid_timestamp'],
         open=discharge_df['current_25th'],
@@ -253,8 +459,8 @@ def main():
     with st.sidebar:
         st.title("Filter Settings")
         model_numbers_and_dates = fetch_model_numbers_and_dates()
-        model_numbers = model_numbers_and_dates['Model_Numb'].unique().tolist()
-        selected_model_numbers = st.multiselect('Select Model Numbers', model_numbers, default=model_numbers)
+        model_numbers = model_numbers_and_dates['Model_Number'].unique().tolist()
+        selected_model_numbers = st.multiselect('Select Model Numbers', model_numbers)
 
         date_range = model_numbers_and_dates['DeviceDate'].unique()
         start_date = st.date_input("Start Date", min(date_range), min_value=min(date_range), max_value=max(date_range))
@@ -303,6 +509,13 @@ def display_data_and_plots(filtered_df, processed_df):
     st.dataframe(processed_df)
     
     # Add vis spec here
+    vis_spec = r"""{"config":[{"config":{"defaultAggregated":false,"geoms":["circle"],"coordSystem":"generic","limit":-1,"timezoneDisplayOffset":0},"encodings":{"dimensions":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"Ignition_Status","name":"Ignition_Status","basename":"Ignition_Status","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"Latitude","name":"Latitude","basename":"Latitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Longitude","name":"Longitude","basename":"Longitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MaxCellID","name":"BM_MaxCellID","basename":"BM_MaxCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MinCellID","name":"BM_MinCellID","basename":"BM_MinCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Max_monomer_temperature","name":"Max_monomer_temperature","basename":"Max_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Min_monomer_temperature","name":"Min_monomer_temperature","basename":"Min_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charging_MOS_tube_status","name":"Charging_MOS_tube_status","basename":"Charging_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Discharge_MOS_tube_status","name":"Discharge_MOS_tube_status","basename":"Discharge_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charge_Discharge_cycles","name":"Charge_Discharge_cycles","basename":"Charge_Discharge_cycles","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"timestamp","name":"timestamp","basename":"timestamp","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"voltage_increase","name":"voltage_increase","basename":"voltage_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"soc_increase","name":"soc_increase","basename":"soc_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"state","name":"state","basename":"state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"filtered_state","name":"filtered_state","basename":"filtered_state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"step_type","name":"step_type","basename":"step_type","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"gw_mea_key_fid","name":"Measure names","analyticType":"dimension","semanticType":"nominal"},{"fid":"final_state","name":"final_state","semanticType":"nominal","analyticType":"dimension","basename":"final_state","dragId":"GW_IJlCNAE6"}],"measures":[{"fid":"speed","name":"speed","basename":"speed","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_SocPercent","name":"BM_SocPercent","basename":"BM_SocPercent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattVoltage","name":"BM_BattVoltage","basename":"BM_BattVoltage","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattCurrent","name":"BM_BattCurrent","basename":"BM_BattCurrent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MaxCellVolt","name":"BM_MaxCellVolt","basename":"BM_MaxCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MinCellVolt","name":"BM_MinCellVolt","basename":"BM_MinCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Frame_numberV","name":"Frame_numberV","basename":"Frame_numberV","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BatteryCapacityAh","name":"BM_BatteryCapacityAh","basename":"BM_BatteryCapacityAh","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"time_diff","name":"time_diff","basename":"time_diff","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"alpha","name":"alpha","basename":"alpha","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Current(A)","name":"Fitted_Current(A)","basename":"Fitted_Current(A)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Voltage(V)","name":"Fitted_Voltage(V)","basename":"Fitted_Voltage(V)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Pack_Temperature_(C)","name":"Pack_Temperature_(C)","basename":"Pack_Temperature_(C)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_change","name":"state_change","basename":"state_change","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_duration","name":"state_duration","basename":"state_duration","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"gw_count_fid","name":"Row count","analyticType":"measure","semanticType":"quantitative","aggName":"sum","computed":true,"expression":{"op":"one","params":[],"as":"gw_count_fid"}},{"fid":"gw_mea_val_fid","name":"Measure values","analyticType":"measure","semanticType":"quantitative","aggName":"sum"},{"fid":"soc_diff","name":"soc_diff","semanticType":"quantitative","analyticType":"measure","basename":"soc_diff","dragId":"GW_Ima4zjkn"}],"rows":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"BM_SocPercent","name":"BM_SocPercent","basename":"BM_SocPercent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0}],"columns":[{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0}],"color":[{"fid":"final_state","name":"final_state","semanticType":"nominal","analyticType":"dimension","basename":"final_state","dragId":"GW_IJlCNAE6"}],"opacity":[],"size":[],"shape":[],"radius":[],"theta":[],"longitude":[],"latitude":[],"geoId":[],"details":[],"filters":[],"text":[]},"layout":{"showActions":false,"showTableSummary":false,"stack":"stack","interactiveScale":false,"zeroScale":false,"size":{"mode":"fixed","width":1000,"height":593},"format":{},"geoKey":"name","resolve":{"x":false,"y":false,"color":false,"opacity":false,"shape":false,"size":false},"scaleIncludeUnmatchedChoropleth":false,"showAllGeoshapeInChoropleth":false,"colorPalette":"","useSvg":false,"scale":{"opacity":{},"size":{}}},"visId":"gw_tWTT","name":"Step Type and SOC over time"},{"config":{"defaultAggregated":false,"geoms":["circle"],"coordSystem":"generic","limit":-1,"timezoneDisplayOffset":0},"encodings":{"dimensions":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"Ignition_Status","name":"Ignition_Status","basename":"Ignition_Status","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"Latitude","name":"Latitude","basename":"Latitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Longitude","name":"Longitude","basename":"Longitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MaxCellID","name":"BM_MaxCellID","basename":"BM_MaxCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MinCellID","name":"BM_MinCellID","basename":"BM_MinCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Max_monomer_temperature","name":"Max_monomer_temperature","basename":"Max_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Min_monomer_temperature","name":"Min_monomer_temperature","basename":"Min_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charging_MOS_tube_status","name":"Charging_MOS_tube_status","basename":"Charging_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Discharge_MOS_tube_status","name":"Discharge_MOS_tube_status","basename":"Discharge_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charge_Discharge_cycles","name":"Charge_Discharge_cycles","basename":"Charge_Discharge_cycles","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"timestamp","name":"timestamp","basename":"timestamp","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"voltage_increase","name":"voltage_increase","basename":"voltage_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"soc_increase","name":"soc_increase","basename":"soc_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"state","name":"state","basename":"state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"filtered_state","name":"filtered_state","basename":"filtered_state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"step_type","name":"step_type","basename":"step_type","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"gw_mea_key_fid","name":"Measure names","analyticType":"dimension","semanticType":"nominal"},{"fid":"final_state","name":"final_state","semanticType":"nominal","analyticType":"dimension","basename":"final_state","dragId":"GW_FSI3g04A"}],"measures":[{"fid":"speed","name":"speed","basename":"speed","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_SocPercent","name":"BM_SocPercent","basename":"BM_SocPercent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattVoltage","name":"BM_BattVoltage","basename":"BM_BattVoltage","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattCurrent","name":"BM_BattCurrent","basename":"BM_BattCurrent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MaxCellVolt","name":"BM_MaxCellVolt","basename":"BM_MaxCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MinCellVolt","name":"BM_MinCellVolt","basename":"BM_MinCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Frame_numberV","name":"Frame_numberV","basename":"Frame_numberV","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BatteryCapacityAh","name":"BM_BatteryCapacityAh","basename":"BM_BatteryCapacityAh","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"time_diff","name":"time_diff","basename":"time_diff","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"alpha","name":"alpha","basename":"alpha","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Current(A)","name":"Fitted_Current(A)","basename":"Fitted_Current(A)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Voltage(V)","name":"Fitted_Voltage(V)","basename":"Fitted_Voltage(V)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Pack_Temperature_(C)","name":"Pack_Temperature_(C)","basename":"Pack_Temperature_(C)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_change","name":"state_change","basename":"state_change","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_duration","name":"state_duration","basename":"state_duration","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"gw_count_fid","name":"Row count","analyticType":"measure","semanticType":"quantitative","aggName":"sum","computed":true,"expression":{"op":"one","params":[],"as":"gw_count_fid"}},{"fid":"gw_mea_val_fid","name":"Measure values","analyticType":"measure","semanticType":"quantitative","aggName":"sum"},{"fid":"soc_diff","name":"soc_diff","semanticType":"quantitative","analyticType":"measure","basename":"soc_diff","dragId":"GW_lZs3ybvX"}],"rows":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"BM_BattVoltage","name":"BM_BattVoltage","basename":"BM_BattVoltage","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0}],"columns":[{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0}],"color":[{"fid":"filtered_state","name":"filtered_state","basename":"filtered_state","semanticType":"nominal","analyticType":"dimension","offset":0}],"opacity":[],"size":[],"shape":[],"radius":[],"theta":[],"longitude":[],"latitude":[],"geoId":[],"details":[],"filters":[],"text":[]},"layout":{"showActions":false,"showTableSummary":false,"stack":"stack","interactiveScale":false,"zeroScale":false,"size":{"mode":"fixed","width":1000,"height":593},"format":{},"geoKey":"name","resolve":{"x":false,"y":false,"color":false,"opacity":false,"shape":false,"size":false},"scaleIncludeUnmatchedChoropleth":false,"showAllGeoshapeInChoropleth":false,"colorPalette":"","useSvg":false,"scale":{"opacity":{},"size":{}}},"visId":"gw_Cxa2","name":"Step Type and SOC over time Copy"}],"chart_map":{},"workflow_list":[{"workflow":[{"type":"view","query":[{"op":"raw","fields":["DeviceDate","Model_Number","final_state","BM_SocPercent"]}]}]},{"workflow":[{"type":"view","query":[{"op":"raw","fields":["DeviceDate","Model_Number","filtered_state","BM_BattVoltage"]}]}]}],"version":"0.4.8.9"}"""
+
+
+
+    # PyG Walker for data exploration
+    pyg_app = StreamlitRenderer(processed_df,spec=vis_spec)
+    pyg_app.explorer()
     
     fig = plot_current_voltage(processed_df)
     st.plotly_chart(fig, use_container_width=True)
@@ -328,4 +541,3 @@ def display_data_and_plots(filtered_df, processed_df):
 
 if __name__ == "__main__":
     main()
-
