@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import clickhouse_connect
 from pygwalker.api.streamlit import StreamlitRenderer
 
+
 # ClickHouse connection details
 ch_host = 'a84a1hn9ig.ap-south-1.aws.clickhouse.cloud'
 ch_user = 'default'
