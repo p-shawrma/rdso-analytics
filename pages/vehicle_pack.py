@@ -390,68 +390,6 @@ def apply_filters(df):
     filtered_df = df[df['step_type'].isin(selected_types)]
     return filtered_df
 
-def plot_current_voltage(df):
-    trace1 = go.Scatter(x=df['timestamp'], y=df['Fitted_Current(A)'], mode='lines', name='Current (A)', line=dict(color='red'))
-    trace2 = go.Scatter(x=df['timestamp'], y=df['Fitted_Voltage(V)'], mode='lines', name='Voltage (V)', yaxis='y2', line=dict(color='blue'))
-    layout = go.Layout(
-        title='Current and Voltage Over Time',
-        xaxis=dict(title='Timestamp'),
-        yaxis=dict(title='Current (A)'),
-        yaxis2=dict(title='Voltage (V)', overlaying='y', side='right'),
-        autosize=True,
-        template='plotly_white'
-    )
-    fig = go.Figure(data=[trace1, trace2], layout=layout)
-    fig.update_layout(autosize=True, margin=dict(l=20, r=20, t=40, b=20))
-    return fig
-
-def plot_current_soc(df):
-    trace1 = go.Scatter(x=df['timestamp'], y=df['Fitted_Current(A)'], mode='lines', name='Current (A)', line=dict(color='red'))
-    trace2 = go.Scatter(x=df['timestamp'], y=df['BM_SocPercent'], mode='lines', name='SOC (%)', yaxis='y2', line=dict(color='green'))
-    layout = go.Layout(
-        title='Current and SOC Over Time',
-        xaxis=dict(title='Timestamp'),
-        yaxis=dict(title='Current (A)'),
-        yaxis2=dict(title='SOC (%)', overlaying='y', side='right')
-    )
-    fig = go.Figure(data=[trace1, trace2], layout=layout)
-    return fig
-
-def plot_voltage_soc(df):
-    trace1 = go.Scatter(x=df['timestamp'], y=df['Fitted_Voltage(V)'], mode='lines', name='Voltage (V)', line=dict(color='blue'))
-    trace2 = go.Scatter(x=df['timestamp'], y=df['BM_SocPercent'], mode='lines', name='SOC (%)', yaxis='y2', line=dict(color='green'))
-    layout = go.Layout(
-        title='Voltage and SOC Over Time',
-        xaxis=dict(title='Timestamp'),
-        yaxis=dict(title='Voltage (V)'),
-        yaxis2=dict(title='SOC (%)', overlaying='y', side='right')
-    )
-    fig = go.Figure(data=[trace1, trace2], layout=layout)
-    return fig
-
-def plot_temp(df):
-    trace1 = go.Scatter(x=df['timestamp'], y=df['Max_monomer_temperature'], mode='lines', name='Max Cell Temp (C)', line=dict(color='orange'))
-    trace2 = go.Scatter(x=df['timestamp'], y=df['Min_monomer_temperature'], mode='lines', name='Min Cell Temp (C)', line=dict(color='purple'))
-    layout = go.Layout(title='Max and Min Cell Temperatures Over Time', xaxis=dict(title='Timestamp'), yaxis=dict(title='Temperature (C)'))
-    fig = go.Figure(data=[trace1, trace2], layout=layout)
-    return fig
-
-def calculate_midpoint(row):
-    return row['start_timestamp'] + (row['end_timestamp'] - row['start_timestamp']) / 2
-
-def plot_discharge_currents(df):
-    df['mid_timestamp'] = df.apply(calculate_midpoint, axis=1)
-    discharge_df = df[df['step_type'] == 'discharge']  # Discharge step type
-    fig = go.Figure(data=[go.Candlestick(
-        x=discharge_df['mid_timestamp'],
-        open=discharge_df['current_25th'],
-        high=discharge_df['max_current'],
-        low=discharge_df['min_current'],
-        close=discharge_df['current_75th'],
-        increasing_line_color='green', decreasing_line_color='red'
-    )])
-    fig.update_layout(title='Current Distribution in Discharge States', xaxis_title='Time', yaxis_title='Current (A)', xaxis_rangeslider_visible=False)
-    return fig
 
 def create_day_wise_summary(df):
     discharge = df[df['step_type'] == 'discharge']
@@ -481,19 +419,6 @@ def create_day_wise_summary(df):
     }, inplace=True)
 
     return day_wise_summary
-
-
-def plot_discharge_duration_candlestick(df):
-    fig = go.Figure(data=[go.Candlestick(
-        x=df.index,
-        open=df['discharge_time_25th'],
-        high=df['discharge_time_max'],
-        low=df['discharge_time_min'],
-        close=df['discharge_time_75th'],
-        increasing_line_color='green', decreasing_line_color='red'
-    )])
-    fig.update_layout(title='Candlestick Plot of Discharge Durations', xaxis_title='Date', yaxis_title='Duration in Minutes', xaxis_rangeslider_visible=False)
-    return fig
 
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
@@ -553,33 +478,16 @@ def display_data_and_plots(filtered_df, processed_df):
     # Add vis spec here
     vis_spec = r"""{"config":[{"config":{"defaultAggregated":false,"geoms":["circle"],"coordSystem":"generic","limit":-1,"timezoneDisplayOffset":0},"encodings":{"dimensions":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"Ignition_Status","name":"Ignition_Status","basename":"Ignition_Status","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"Latitude","name":"Latitude","basename":"Latitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Longitude","name":"Longitude","basename":"Longitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MaxCellID","name":"BM_MaxCellID","basename":"BM_MaxCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MinCellID","name":"BM_MinCellID","basename":"BM_MinCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Max_monomer_temperature","name":"Max_monomer_temperature","basename":"Max_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Min_monomer_temperature","name":"Min_monomer_temperature","basename":"Min_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charging_MOS_tube_status","name":"Charging_MOS_tube_status","basename":"Charging_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Discharge_MOS_tube_status","name":"Discharge_MOS_tube_status","basename":"Discharge_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charge_Discharge_cycles","name":"Charge_Discharge_cycles","basename":"Charge_Discharge_cycles","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"timestamp","name":"timestamp","basename":"timestamp","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"voltage_increase","name":"voltage_increase","basename":"voltage_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"soc_increase","name":"soc_increase","basename":"soc_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"state","name":"state","basename":"state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"filtered_state","name":"filtered_state","basename":"filtered_state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"step_type","name":"step_type","basename":"step_type","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"gw_mea_key_fid","name":"Measure names","analyticType":"dimension","semanticType":"nominal"},{"fid":"final_state","name":"final_state","semanticType":"nominal","analyticType":"dimension","basename":"final_state","dragId":"GW_IJlCNAE6"}],"measures":[{"fid":"speed","name":"speed","basename":"speed","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_SocPercent","name":"BM_SocPercent","basename":"BM_SocPercent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattVoltage","name":"BM_BattVoltage","basename":"BM_BattVoltage","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattCurrent","name":"BM_BattCurrent","basename":"BM_BattCurrent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MaxCellVolt","name":"BM_MaxCellVolt","basename":"BM_MaxCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MinCellVolt","name":"BM_MinCellVolt","basename":"BM_MinCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Frame_numberV","name":"Frame_numberV","basename":"Frame_numberV","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BatteryCapacityAh","name":"BM_BatteryCapacityAh","basename":"BM_BatteryCapacityAh","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"time_diff","name":"time_diff","basename":"time_diff","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"alpha","name":"alpha","basename":"alpha","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Current(A)","name":"Fitted_Current(A)","basename":"Fitted_Current(A)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Voltage(V)","name":"Fitted_Voltage(V)","basename":"Fitted_Voltage(V)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Pack_Temperature_(C)","name":"Pack_Temperature_(C)","basename":"Pack_Temperature_(C)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_change","name":"state_change","basename":"state_change","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_duration","name":"state_duration","basename":"state_duration","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"gw_count_fid","name":"Row count","analyticType":"measure","semanticType":"quantitative","aggName":"sum","computed":true,"expression":{"op":"one","params":[],"as":"gw_count_fid"}},{"fid":"gw_mea_val_fid","name":"Measure values","analyticType":"measure","semanticType":"quantitative","aggName":"sum"},{"fid":"soc_diff","name":"soc_diff","semanticType":"quantitative","analyticType":"measure","basename":"soc_diff","dragId":"GW_Ima4zjkn"}],"rows":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"BM_SocPercent","name":"BM_SocPercent","basename":"BM_SocPercent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0}],"columns":[{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0}],"color":[{"fid":"final_state","name":"final_state","semanticType":"nominal","analyticType":"dimension","basename":"final_state","dragId":"GW_IJlCNAE6"}],"opacity":[],"size":[],"shape":[],"radius":[],"theta":[],"longitude":[],"latitude":[],"geoId":[],"details":[],"filters":[],"text":[]},"layout":{"showActions":false,"showTableSummary":false,"stack":"stack","interactiveScale":false,"zeroScale":false,"size":{"mode":"fixed","width":1000,"height":593},"format":{},"geoKey":"name","resolve":{"x":false,"y":false,"color":false,"opacity":false,"shape":false,"size":false},"scaleIncludeUnmatchedChoropleth":false,"showAllGeoshapeInChoropleth":false,"colorPalette":"","useSvg":false,"scale":{"opacity":{},"size":{}}},"visId":"gw_tWTT","name":"Step Type and SOC over time"},{"config":{"defaultAggregated":false,"geoms":["circle"],"coordSystem":"generic","limit":-1,"timezoneDisplayOffset":0},"encodings":{"dimensions":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"Ignition_Status","name":"Ignition_Status","basename":"Ignition_Status","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"Latitude","name":"Latitude","basename":"Latitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Longitude","name":"Longitude","basename":"Longitude","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MaxCellID","name":"BM_MaxCellID","basename":"BM_MaxCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"BM_MinCellID","name":"BM_MinCellID","basename":"BM_MinCellID","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Max_monomer_temperature","name":"Max_monomer_temperature","basename":"Max_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Min_monomer_temperature","name":"Min_monomer_temperature","basename":"Min_monomer_temperature","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charging_MOS_tube_status","name":"Charging_MOS_tube_status","basename":"Charging_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Discharge_MOS_tube_status","name":"Discharge_MOS_tube_status","basename":"Discharge_MOS_tube_status","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"Charge_Discharge_cycles","name":"Charge_Discharge_cycles","basename":"Charge_Discharge_cycles","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"timestamp","name":"timestamp","basename":"timestamp","semanticType":"temporal","analyticType":"dimension","offset":0},{"fid":"voltage_increase","name":"voltage_increase","basename":"voltage_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"soc_increase","name":"soc_increase","basename":"soc_increase","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"state","name":"state","basename":"state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"filtered_state","name":"filtered_state","basename":"filtered_state","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"step_type","name":"step_type","basename":"step_type","semanticType":"quantitative","analyticType":"dimension","offset":0},{"fid":"gw_mea_key_fid","name":"Measure names","analyticType":"dimension","semanticType":"nominal"},{"fid":"final_state","name":"final_state","semanticType":"nominal","analyticType":"dimension","basename":"final_state","dragId":"GW_FSI3g04A"}],"measures":[{"fid":"speed","name":"speed","basename":"speed","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_SocPercent","name":"BM_SocPercent","basename":"BM_SocPercent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattVoltage","name":"BM_BattVoltage","basename":"BM_BattVoltage","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BattCurrent","name":"BM_BattCurrent","basename":"BM_BattCurrent","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MaxCellVolt","name":"BM_MaxCellVolt","basename":"BM_MaxCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_MinCellVolt","name":"BM_MinCellVolt","basename":"BM_MinCellVolt","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Frame_numberV","name":"Frame_numberV","basename":"Frame_numberV","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"BM_BatteryCapacityAh","name":"BM_BatteryCapacityAh","basename":"BM_BatteryCapacityAh","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"time_diff","name":"time_diff","basename":"time_diff","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"alpha","name":"alpha","basename":"alpha","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Current(A)","name":"Fitted_Current(A)","basename":"Fitted_Current(A)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Fitted_Voltage(V)","name":"Fitted_Voltage(V)","basename":"Fitted_Voltage(V)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"Pack_Temperature_(C)","name":"Pack_Temperature_(C)","basename":"Pack_Temperature_(C)","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_change","name":"state_change","basename":"state_change","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"state_duration","name":"state_duration","basename":"state_duration","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0},{"fid":"gw_count_fid","name":"Row count","analyticType":"measure","semanticType":"quantitative","aggName":"sum","computed":true,"expression":{"op":"one","params":[],"as":"gw_count_fid"}},{"fid":"gw_mea_val_fid","name":"Measure values","analyticType":"measure","semanticType":"quantitative","aggName":"sum"},{"fid":"soc_diff","name":"soc_diff","semanticType":"quantitative","analyticType":"measure","basename":"soc_diff","dragId":"GW_lZs3ybvX"}],"rows":[{"fid":"Model_Number","name":"Model_Number","basename":"Model_Number","semanticType":"nominal","analyticType":"dimension","offset":0},{"fid":"BM_BattVoltage","name":"BM_BattVoltage","basename":"BM_BattVoltage","analyticType":"measure","semanticType":"quantitative","aggName":"sum","offset":0}],"columns":[{"fid":"DeviceDate","name":"DeviceDate","basename":"DeviceDate","semanticType":"temporal","analyticType":"dimension","offset":0}],"color":[{"fid":"filtered_state","name":"filtered_state","basename":"filtered_state","semanticType":"nominal","analyticType":"dimension","offset":0}],"opacity":[],"size":[],"shape":[],"radius":[],"theta":[],"longitude":[],"latitude":[],"geoId":[],"details":[],"filters":[],"text":[]},"layout":{"showActions":false,"showTableSummary":false,"stack":"stack","interactiveScale":false,"zeroScale":false,"size":{"mode":"fixed","width":1000,"height":593},"format":{},"geoKey":"name","resolve":{"x":false,"y":false,"color":false,"opacity":false,"shape":false,"size":false},"scaleIncludeUnmatchedChoropleth":false,"showAllGeoshapeInChoropleth":false,"colorPalette":"","useSvg":false,"scale":{"opacity":{},"size":{}}},"visId":"gw_Cxa2","name":"Step Type and SOC over time Copy"}],"chart_map":{},"workflow_list":[{"workflow":[{"type":"view","query":[{"op":"raw","fields":["DeviceDate","Model_Number","final_state","BM_SocPercent"]}]}]},{"workflow":[{"type":"view","query":[{"op":"raw","fields":["DeviceDate","Model_Number","filtered_state","BM_BattVoltage"]}]}]}],"version":"0.4.8.9"}"""
 
-
-
     # PyG Walker for data exploration
     pyg_app = StreamlitRenderer(processed_df,spec=vis_spec)
     pyg_app.explorer()
     
-    fig = plot_current_voltage(processed_df)
-    st.plotly_chart(fig, use_container_width=True)
-    fig = plot_current_soc(processed_df)
-    st.plotly_chart(fig, use_container_width=True)
-    fig = plot_voltage_soc(processed_df)
-    st.plotly_chart(fig, use_container_width=True)
-    fig = plot_temp(processed_df)
-    st.plotly_chart(fig, use_container_width=True)
-    
     st.write("Filtered Grouped Data Overview:")
     st.dataframe(filtered_df)
-    
-    fig = plot_discharge_currents(filtered_df)
-    st.plotly_chart(fig, use_container_width=True)
     
     summary_df = create_day_wise_summary(filtered_df)
     st.write("Day-wise Summary:")
     st.dataframe(summary_df)
-    
-    fig = plot_discharge_duration_candlestick(summary_df)
-    st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
