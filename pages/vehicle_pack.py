@@ -343,7 +343,6 @@ def calculate_percentile(n):
 #     return result
 
 def process_grouped_data(df):
-    # Group by Model_Number and final_state change
     grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
     result = grouped.agg(
         start_timestamp=('timestamp', 'min'),
@@ -373,10 +372,9 @@ def process_grouped_data(df):
                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
 
-    result = result.reindex(columns=columns_ordered)
+    result = result.reset_index(drop=True).reindex(columns=columns_ordered)
     
     return result
-
 
 
 def apply_filters(df):
@@ -452,19 +450,19 @@ def create_day_wise_summary(df):
     discharge = df[df['step_type'] == 'discharge']
     charge = df[df['step_type'] == 'charge']
 
-    discharge_summary = discharge.groupby('date').agg({
+    discharge_summary = discharge.groupby(['Model_Number', 'date']).agg({
         'change_in_soc': 'sum',
         'duration_minutes': ['sum', 'min', 'max', 'median', calculate_percentile(25), calculate_percentile(75)]
     })
 
-    charge_summary = charge.groupby('date').agg({
+    charge_summary = charge.groupby(['Model_Number', 'date']).agg({
         'change_in_soc': 'sum'
     })
 
     discharge_summary.columns = ['_'.join(col).strip() for col in discharge_summary.columns.values]
     charge_summary.columns = ['total_charge_soc']
 
-    day_wise_summary = pd.merge(discharge_summary, charge_summary, on='date', how='outer')
+    day_wise_summary = pd.merge(discharge_summary, charge_summary, on=['Model_Number', 'date'], how='outer')
     day_wise_summary.rename(columns={
         'change_in_soc_sum': 'total_discharge_soc',
         'duration_minutes_sum': 'total_discharge_time',
@@ -476,6 +474,7 @@ def create_day_wise_summary(df):
     }, inplace=True)
 
     return day_wise_summary
+
 
 def plot_discharge_duration_candlestick(df):
     fig = go.Figure(data=[go.Candlestick(
