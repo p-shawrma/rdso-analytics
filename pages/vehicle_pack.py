@@ -16,7 +16,7 @@ def fetch_mapping_table():
         user='postgres.gqmpfexjoachyjgzkhdf',
         password='Change@2015Log9',
         host='aws-0-ap-south-1.pooler.supabase.com',
-        port='5432'
+        port='6543'
     )
     query = "SELECT * FROM mapping_table"
     df_mapping = pd.read_sql(query, conn)
