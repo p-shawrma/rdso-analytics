@@ -408,6 +408,12 @@ def process_grouped_data(df):
 
     return result
 
+def fetch_location_description(lat, lon):
+    # Use reverse geocoding to fetch location description
+    geolocator = Nominatim(user_agent="myGeocoder")
+    location = geolocator.reverse((lat, lon), exactly_one=True)
+    return location.address if location else "Unknown Location"
+
 def generate_soc_report(df):
     # Group by 'final_state' change and 'Model_Number'
     grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
@@ -490,9 +496,9 @@ def generate_soc_report(df):
         host='aws-0-ap-south-1.pooler.supabase.com',
         port='5432'
     )
-    cur = conn.cursor()
-    cur.execute("SELECT telematics_number, partner_id, product, deployed_city, reg_no, chassis_number FROM public.mapping_table")
-    mapping_data = cur.fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT telematics_number, partner_id, product, deployed_city, reg_no, chassis_number FROM public.mapping_table")
+    mapping_data = cursor.fetchall()
     mapping_df = pd.DataFrame(mapping_data, columns=['telematics_number', 'partner_id', 'product', 'deployed_city', 'reg_no', 'chassis_number'])
     mapping_dict = mapping_df.set_index('telematics_number').T.to_dict()
 
@@ -507,12 +513,7 @@ def generate_soc_report(df):
     result['chassis_number'] = result['telematics_number'].apply(lambda x: fetch_mapping_info(x, 'chassis_number'))
 
     return result
-# Helper function to get location description
-def get_location_description(lat, lon):
-    geolocator = Nominatim(user_agent="geoapiExercises")
-    location = geolocator.reverse((lat, lon), language='en')
-    return location.address if location else "Unknown location"
-
+    
 def apply_filters(df):
     step_types = df['step_type'].unique().tolist()
     selected_types = st.sidebar.multiselect('Select Step Types', step_types, default=step_types)
