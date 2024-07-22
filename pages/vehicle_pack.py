@@ -408,9 +408,7 @@ def process_grouped_data(df):
 
     return result
 
-def process_soc_report(df):
-    df_mapping = fetch_mapping_table()
-    
+def generate_soc_report(df):
     # Group by 'final_state' change and 'Model_Number'
     grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
 
@@ -438,64 +436,77 @@ def process_soc_report(df):
     # Calculate the SOC change
     result['start_date'] = result['start_timestamp'].dt.date
     result['change_in_soc'] = result['soc_end'] - result['soc_start']
-
-    # Calculate total_distance_km for discharge rows
-    result['total_distance_km'] = 0.0
-    for name, group in grouped:
-        if group['final_state'].iloc[0] == 'discharge':
-            distances = [haversine_distance(group.iloc[i]['Latitude'], group.iloc[i]['Longitude'],
-                                            group.iloc[i+1]['Latitude'], group.iloc[i+1]['Longitude'])
-                         for i in range(len(group)-1)]
-            result.loc[name, 'total_distance_km'] = sum(distances)
-
-    # Calculate total_running_time_seconds and total_halt_time_seconds
-    result['total_running_time_seconds'] = result.apply(lambda row: row['duration_minutes'] * 60 if row['soc_type'] == 'discharge' else None, axis=1)
-    result['total_halt_time_seconds'] = result.apply(lambda row: row['duration_minutes'] * 60 if row['soc_type'] == 'idle' else None, axis=1)
-
-    # Create soc_range column
-    result['soc_range'] = result.apply(lambda row: f"{row['soc_start']}% - {row['soc_end']}%", axis=1)
-
-    # Calculate charging_location_coordinates and charging_location
-    charge_groups = grouped.filter(lambda x: x['final_state'].iloc[0] == 'charge')
-    charge_locations = charge_groups.groupby('Model_Number').first().reset_index()
-    result = result.merge(charge_locations[['Model_Number', 'Latitude', 'Longitude']], on='Model_Number', suffixes=('', '_charge'), how='left')
-    result['charging_location_coordinates'] = result.apply(lambda row: f"{row['Latitude_charge']} , {row['Longitude_charge']}" if pd.notnull(row['Latitude_charge']) else None, axis=1)
-    result['charging_location'] = result.apply(lambda row: get_location_description(row['Latitude_charge'], row['Longitude_charge']) if pd.notnull(row['Latitude_charge']) else None, axis=1)
-
-    # Add end_date column
     result['end_date'] = result['end_timestamp'].dt.date
 
-    # Remove "it_" from vehicle_number and add telematics_number
-    result['telematics_number'] = result['Model_Number'].apply(lambda x: x.replace("it_", ""))
-
-    # Merge with mapping table to add additional columns
-    result = result.merge(df_mapping, how='left', left_on='telematics_number', right_on='telematics_number')
-
-    # Rename columns as specified
+    # Ensure columns are correctly ordered and renamed
     result.rename(columns={
         'Model_Number': 'vehicle_number',
-        'start_date': 'start_date',
         'start_timestamp': 'start_time',
         'end_timestamp': 'end_time',
         'soc_type': 'soc_type',
-        'total_running_time_seconds': 'total_running_time_seconds',
-        'total_halt_time_seconds': 'total_halt_time_seconds',
-        'telematics_number': 'telematics_number'
+        'start_date': 'start_date',
+        'end_date': 'end_date'
     }, inplace=True)
 
-    # Create primary_id column
+    # Create additional columns
     result['primary_id'] = result.apply(lambda row: f"{row['vehicle_number']}-{row['start_time']}", axis=1)
+    result['soc_range'] = result.apply(lambda row: f"{row['soc_start']}% - {row['soc_end']}%", axis=1)
 
-    # Select and reorder columns
-    columns_ordered = ['primary_id', 'vehicle_number', 'start_date', 'start_time', 'end_time', 'soc_type', 'duration_minutes', 'soc_start', 'soc_end', 'change_in_soc',
-                       'voltage_start', 'voltage_end', 'average_current', 'median_current', 'min_current', 'max_current', 'current_25th', 'current_75th',
-                       'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature', 'total_distance_km', 'total_running_time_seconds',
-                       'soc_range', 'charging_location', 'energy_consumption', 'total_halt_time_seconds', 'charging_location_coordinates', 'end_date', 'partner_id',
-                       'product', 'deployed_city', 'reg_no', 'telematics_number', 'chassis_number']
-    result = result[columns_ordered]
+    # Initialize new columns with None
+    result['total_distance_km'] = None
+    result['total_running_time_seconds'] = None
+    result['energy_consumption'] = None
+    result['total_halt_time_seconds'] = None
+    result['charging_location'] = None
+    result['charging_location_coordinates'] = None
+
+    for name, group in grouped:
+        if group['final_state'].iloc[0] == 'discharge':
+            # Calculate total distance
+            total_distance = 0
+            for i in range(1, len(group)):
+                coord1 = (group.iloc[i-1]['Latitude'], group.iloc[i-1]['Longitude'])
+                coord2 = (group.iloc[i]['Latitude'], group.iloc[i]['Longitude'])
+                total_distance += haversine(coord1, coord2)
+            result.loc[result['primary_id'] == name, 'total_distance_km'] = total_distance
+            # Calculate total running time in seconds
+            total_running_time = group['duration_minutes'].sum() * 60
+            result.loc[result['primary_id'] == name, 'total_running_time_seconds'] = total_running_time
+        elif group['final_state'].iloc[0] == 'charge':
+            # Get charging location
+            lat, lon = group.iloc[0]['Latitude'], group.iloc[0]['Longitude']
+            result.loc[result['primary_id'] == name, 'charging_location'] = fetch_location_description(lat, lon)
+            result.loc[result['primary_id'] == name, 'charging_location_coordinates'] = f"{lat}, {lon}"
+        elif group['final_state'].iloc[0] == 'idle':
+            # Calculate total halt time in seconds
+            total_halt_time = group['duration_minutes'].sum() * 60
+            result.loc[result['primary_id'] == name, 'total_halt_time_seconds'] = total_halt_time
+
+    # Fetch additional details from Supabase
+    conn = psycopg2.connect(
+        database="postgres",
+        user='postgres.gqmpfexjoachyjgzkhdf',
+        password='Change@2015Log9',
+        host='aws-0-ap-south-1.pooler.supabase.com',
+        port='5432'
+    )
+    cur = conn.cursor()
+    cur.execute("SELECT telematics_number, partner_id, product, deployed_city, reg_no, chassis_number FROM public.mapping_table")
+    mapping_data = cur.fetchall()
+    mapping_df = pd.DataFrame(mapping_data, columns=['telematics_number', 'partner_id', 'product', 'deployed_city', 'reg_no', 'chassis_number'])
+    mapping_dict = mapping_df.set_index('telematics_number').T.to_dict()
+
+    def fetch_mapping_info(telematics_number, key):
+        return mapping_dict.get(telematics_number, {}).get(key, None)
+
+    result['telematics_number'] = result['vehicle_number'].apply(lambda x: x.replace("it_", ""))
+    result['partner_id'] = result['telematics_number'].apply(lambda x: fetch_mapping_info(x, 'partner_id'))
+    result['product'] = result['telematics_number'].apply(lambda x: fetch_mapping_info(x, 'product'))
+    result['deployed_city'] = result['telematics_number'].apply(lambda x: fetch_mapping_info(x, 'deployed_city'))
+    result['reg_no'] = result['telematics_number'].apply(lambda x: fetch_mapping_info(x, 'reg_no'))
+    result['chassis_number'] = result['telematics_number'].apply(lambda x: fetch_mapping_info(x, 'chassis_number'))
 
     return result
-
 # Helper function to get location description
 def get_location_description(lat, lon):
     geolocator = Nominatim(user_agent="geoapiExercises")
