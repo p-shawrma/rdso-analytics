@@ -213,7 +213,7 @@ def fetch_mapping_data():
         user='postgres.gqmpfexjoachyjgzkhdf',
         password='Change@2015Log9',
         host='aws-0-ap-south-1.pooler.supabase.com',
-        port='5432'
+        port='6543'
     )
     cursor = conn.cursor()
     cursor.execute("SELECT telematics_number, partner_id, product, deployed_city, reg_no, chassis_number FROM public.mapping_table")
