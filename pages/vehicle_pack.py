@@ -345,6 +345,7 @@ def calculate_percentile(n):
 def process_grouped_data(df):
     grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
     result = grouped.agg(
+        Model_Number=('Model_Number', 'first'),
         start_timestamp=('timestamp', 'min'),
         end_timestamp=('timestamp', 'max'),
         step_type=('final_state', 'first'),
@@ -372,7 +373,7 @@ def process_grouped_data(df):
                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
 
-    result = result.reset_index(drop=True).reindex(columns=columns_ordered)
+    result = result.reindex(columns=columns_ordered)
     
     return result
 
