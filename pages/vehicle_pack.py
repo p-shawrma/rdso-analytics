@@ -308,8 +308,43 @@ def calculate_percentile(n):
     
 #     return result
 
+# def process_grouped_data(df):
+#     grouped = df.groupby((df['final_state'] != df['final_state'].shift()).cumsum())
+#     result = grouped.agg(
+#         start_timestamp=('timestamp', 'min'),
+#         end_timestamp=('timestamp', 'max'),
+#         step_type=('final_state', 'first'),
+#         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
+#         soc_start=('BM_SocPercent', 'first'),
+#         soc_end=('BM_SocPercent', 'last'),
+#         voltage_start=('Fitted_Voltage(V)', 'first'),
+#         voltage_end=('Fitted_Voltage(V)', 'last'),
+#         average_current=('Fitted_Current(A)', 'mean'),
+#         median_current=('Fitted_Current(A)', 'median'),
+#         min_current=('Fitted_Current(A)', calculate_percentile(10)),
+#         max_current=('Fitted_Current(A)', calculate_percentile(90)),
+#         current_25th=('Fitted_Current(A)', calculate_percentile(25)),
+#         current_75th=('Fitted_Current(A)', calculate_percentile(75)),
+#         median_max_cell_temperature=('Max_monomer_temperature', 'median'),
+#         median_min_cell_temperature=('Min_monomer_temperature', 'median'),
+#         median_pack_temperature=('Pack_Temperature_(C)', 'median')
+#     )
+
+#     result['date'] = result['start_timestamp'].dt.date
+#     result['change_in_soc'] = result['soc_end'] - result['soc_start']
+
+#     columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
+#                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
+#                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
+#                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
+
+#     result = result.reindex(columns=columns_ordered)
+    
+#     return result
+
 def process_grouped_data(df):
-    grouped = df.groupby((df['final_state'] != df['final_state'].shift()).cumsum())
+    # Group by Model_Number and final_state change
+    grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
     result = grouped.agg(
         start_timestamp=('timestamp', 'min'),
         end_timestamp=('timestamp', 'max'),
@@ -333,7 +368,7 @@ def process_grouped_data(df):
     result['date'] = result['start_timestamp'].dt.date
     result['change_in_soc'] = result['soc_end'] - result['soc_start']
 
-    columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
+    columns_ordered = ['Model_Number', 'date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
@@ -341,6 +376,7 @@ def process_grouped_data(df):
     result = result.reindex(columns=columns_ordered)
     
     return result
+
 
 
 def apply_filters(df):
