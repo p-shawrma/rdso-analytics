@@ -343,9 +343,11 @@ def calculate_percentile(n):
 #     return result
 
 def process_grouped_data(df):
+    # Group by 'final_state' change and 'Model_Number'
     grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
+
+    # Aggregate the data
     result = grouped.agg(
-        Model_Number=('Model_Number', 'first'),
         start_timestamp=('timestamp', 'min'),
         end_timestamp=('timestamp', 'max'),
         step_type=('final_state', 'first'),
@@ -365,17 +367,21 @@ def process_grouped_data(df):
         median_pack_temperature=('Pack_Temperature_(C)', 'median')
     )
 
+    # Calculate the SOC change
     result['date'] = result['start_timestamp'].dt.date
     result['change_in_soc'] = result['soc_end'] - result['soc_start']
 
+    # Ensure columns are correctly ordered and 'final_state' is included
     columns_ordered = ['Model_Number', 'date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
 
-    result = result.reindex(columns=columns_ordered)
-    
+    # Reset the index to ensure 'final_state' and 'Model_Number' are columns
+    result = result.reset_index()[columns_ordered]
+
     return result
+
 
 
 def apply_filters(df):
