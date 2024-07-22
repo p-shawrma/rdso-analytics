@@ -443,7 +443,7 @@ def fetch_mapping_table():
     user = "postgres.gqmpfexjoachyjgzkhdf"
     password = "Change@2015Log9"
     host = "aws-0-ap-south-1.pooler.supabase.com"
-    port = "6543"
+    port = "5432"
     dbname = "postgres"
     
     with psycopg2.connect(
