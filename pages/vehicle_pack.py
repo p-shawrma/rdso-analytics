@@ -447,20 +447,20 @@ def plot_discharge_currents(df):
     return fig
 
 def create_day_wise_summary(df):
-    discharge = df[df['step_type'] == 'discharge']
-    charge = df[df['step_type'] == 'charge']
+    discharge = df[df['step_type'] == 'discharge']  # Discharge step type
+    charge = df[df['step_type'] == 'charge']  # Charge step type
 
     discharge_summary = discharge.groupby(['Model_Number', 'date']).agg({
         'change_in_soc': 'sum',
         'duration_minutes': ['sum', 'min', 'max', 'median', calculate_percentile(25), calculate_percentile(75)]
-    })
+    }).reset_index()
 
     charge_summary = charge.groupby(['Model_Number', 'date']).agg({
         'change_in_soc': 'sum'
-    })
+    }).reset_index()
 
-    discharge_summary.columns = ['_'.join(col).strip() for col in discharge_summary.columns.values]
-    charge_summary.columns = ['total_charge_soc']
+    discharge_summary.columns = ['_'.join(col).strip() if type(col) is tuple else col for col in discharge_summary.columns.values]
+    charge_summary.columns = ['Model_Number', 'date', 'total_charge_soc']
 
     day_wise_summary = pd.merge(discharge_summary, charge_summary, on=['Model_Number', 'date'], how='outer')
     day_wise_summary.rename(columns={
