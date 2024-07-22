@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import clickhouse_connect
 from pygwalker.api.streamlit import StreamlitRenderer
-
+import psycopg2
 from psycopg2 import connect
 from haversine import haversine, Unit
 from geopy.geocoders import Nominatim
