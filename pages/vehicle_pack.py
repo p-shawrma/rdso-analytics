@@ -18,7 +18,7 @@ def fetch_mapping_table():
         host='aws-0-ap-south-1.pooler.supabase.com',
         port='5432'
     )
-    query = "SELECT * FROM public.mapping_table"
+    query = "SELECT * FROM mapping_table"
     df_mapping = pd.read_sql(query, conn)
     conn.close()
     return df_mapping
