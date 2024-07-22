@@ -6,6 +6,22 @@ import plotly.graph_objects as go
 import clickhouse_connect
 from pygwalker.api.streamlit import StreamlitRenderer
 
+from psycopg2 import connect
+from haversine import haversine, Unit
+from geopy.geocoders import Nominatim
+
+def fetch_mapping_table():
+    conn = connect(
+        database="postgres",
+        user='postgres.gqmpfexjoachyjgzkhdf',
+        password='Change@2015Log9',
+        host='aws-0-ap-south-1.pooler.supabase.com',
+        port='5432'
+    )
+    query = "SELECT * FROM public.mapping_table"
+    df_mapping = pd.read_sql(query, conn)
+    conn.close()
+    return df_mapping
 
 # ClickHouse connection details
 ch_host = 'a84a1hn9ig.ap-south-1.aws.clickhouse.cloud'
@@ -49,6 +65,15 @@ def fetch_data(model_numbers, start_date, end_date):
     return df
 
 
+def haversine_distance(lat1, lon1, lat2, lon2):
+    loc1 = (lat1, lon1)
+    loc2 = (lat2, lon2)
+    return haversine(loc1, loc2, unit=Unit.KILOMETERS)
+
+def get_location_description(lat, lon):
+    geolocator = Nominatim(user_agent="geoapiExercises")
+    location = geolocator.reverse((lat, lon), language='en')
+    return location.address if location else "Unknown location"
 
 # def process_data(df):
 #     grouped = df.groupby('Model_Number')
@@ -383,7 +408,99 @@ def process_grouped_data(df):
 
     return result
 
+def process_soc_report(df):
+    df_mapping = fetch_mapping_table()
+    
+    # Group by 'final_state' change and 'Model_Number'
+    grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
 
+    # Aggregate the data
+    result = grouped.agg(
+        start_timestamp=('timestamp', 'min'),
+        end_timestamp=('timestamp', 'max'),
+        soc_type=('final_state', 'first'),
+        duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
+        soc_start=('BM_SocPercent', 'first'),
+        soc_end=('BM_SocPercent', 'last'),
+        voltage_start=('BM_BattVoltage', 'first'),
+        voltage_end=('BM_BattVoltage', 'last'),
+        average_current=('BM_BattCurrent', 'mean'),
+        median_current=('BM_BattCurrent', 'median'),
+        min_current=('BM_BattCurrent', calculate_percentile(5)),
+        max_current=('BM_BattCurrent', calculate_percentile(95)),
+        current_25th=('BM_BattCurrent', calculate_percentile(25)),
+        current_75th=('BM_BattCurrent', calculate_percentile(75)),
+        median_max_cell_temperature=('Max_monomer_temperature', 'median'),
+        median_min_cell_temperature=('Min_monomer_temperature', 'median'),
+        median_pack_temperature=('Pack_Temperature_(C)', 'median')
+    )
+
+    # Calculate the SOC change
+    result['start_date'] = result['start_timestamp'].dt.date
+    result['change_in_soc'] = result['soc_end'] - result['soc_start']
+
+    # Calculate total_distance_km for discharge rows
+    result['total_distance_km'] = 0.0
+    for name, group in grouped:
+        if group['final_state'].iloc[0] == 'discharge':
+            distances = [haversine_distance(group.iloc[i]['Latitude'], group.iloc[i]['Longitude'],
+                                            group.iloc[i+1]['Latitude'], group.iloc[i+1]['Longitude'])
+                         for i in range(len(group)-1)]
+            result.loc[name, 'total_distance_km'] = sum(distances)
+
+    # Calculate total_running_time_seconds and total_halt_time_seconds
+    result['total_running_time_seconds'] = result.apply(lambda row: row['duration_minutes'] * 60 if row['soc_type'] == 'discharge' else None, axis=1)
+    result['total_halt_time_seconds'] = result.apply(lambda row: row['duration_minutes'] * 60 if row['soc_type'] == 'idle' else None, axis=1)
+
+    # Create soc_range column
+    result['soc_range'] = result.apply(lambda row: f"{row['soc_start']}% - {row['soc_end']}%", axis=1)
+
+    # Calculate charging_location_coordinates and charging_location
+    charge_groups = grouped.filter(lambda x: x['final_state'].iloc[0] == 'charge')
+    charge_locations = charge_groups.groupby('Model_Number').first().reset_index()
+    result = result.merge(charge_locations[['Model_Number', 'Latitude', 'Longitude']], on='Model_Number', suffixes=('', '_charge'), how='left')
+    result['charging_location_coordinates'] = result.apply(lambda row: f"{row['Latitude_charge']} , {row['Longitude_charge']}" if pd.notnull(row['Latitude_charge']) else None, axis=1)
+    result['charging_location'] = result.apply(lambda row: get_location_description(row['Latitude_charge'], row['Longitude_charge']) if pd.notnull(row['Latitude_charge']) else None, axis=1)
+
+    # Add end_date column
+    result['end_date'] = result['end_timestamp'].dt.date
+
+    # Remove "it_" from vehicle_number and add telematics_number
+    result['telematics_number'] = result['Model_Number'].apply(lambda x: x.replace("it_", ""))
+
+    # Merge with mapping table to add additional columns
+    result = result.merge(df_mapping, how='left', left_on='telematics_number', right_on='telematics_number')
+
+    # Rename columns as specified
+    result.rename(columns={
+        'Model_Number': 'vehicle_number',
+        'start_date': 'start_date',
+        'start_timestamp': 'start_time',
+        'end_timestamp': 'end_time',
+        'soc_type': 'soc_type',
+        'total_running_time_seconds': 'total_running_time_seconds',
+        'total_halt_time_seconds': 'total_halt_time_seconds',
+        'telematics_number': 'telematics_number'
+    }, inplace=True)
+
+    # Create primary_id column
+    result['primary_id'] = result.apply(lambda row: f"{row['vehicle_number']}-{row['start_time']}", axis=1)
+
+    # Select and reorder columns
+    columns_ordered = ['primary_id', 'vehicle_number', 'start_date', 'start_time', 'end_time', 'soc_type', 'duration_minutes', 'soc_start', 'soc_end', 'change_in_soc',
+                       'voltage_start', 'voltage_end', 'average_current', 'median_current', 'min_current', 'max_current', 'current_25th', 'current_75th',
+                       'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature', 'total_distance_km', 'total_running_time_seconds',
+                       'soc_range', 'charging_location', 'energy_consumption', 'total_halt_time_seconds', 'charging_location_coordinates', 'end_date', 'partner_id',
+                       'product', 'deployed_city', 'reg_no', 'telematics_number', 'chassis_number']
+    result = result[columns_ordered]
+
+    return result
+
+# Helper function to get location description
+def get_location_description(lat, lon):
+    geolocator = Nominatim(user_agent="geoapiExercises")
+    location = geolocator.reverse((lat, lon), language='en')
+    return location.address if location else "Unknown location"
 
 def apply_filters(df):
     step_types = df['step_type'].unique().tolist()
@@ -421,6 +538,57 @@ def create_day_wise_summary(df):
 
     return day_wise_summary
 
+# def main():
+#     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
+
+#     with st.sidebar:
+#         st.title("Filter Settings")
+#         model_numbers_and_dates = fetch_model_numbers_and_dates()
+#         model_numbers = model_numbers_and_dates['Model_Number'].unique().tolist()
+#         selected_model_numbers = st.multiselect('Select Model Numbers', model_numbers)
+
+#         date_range = model_numbers_and_dates['DeviceDate'].unique()
+#         start_date = st.date_input("Start Date", min(date_range), min_value=min(date_range), max_value=max(date_range))
+#         end_date = st.date_input("End Date", max(date_range), min_value=min(date_range), max_value=max(date_range))
+
+#         fetch_button = st.button("Fetch Data")
+
+#     if fetch_button or 'data_loaded' not in st.session_state:
+#         if start_date > end_date:
+#             st.error("End date must be after start date.")
+#             return
+
+#         df = fetch_data(selected_model_numbers, start_date, end_date)
+#         if not df.empty:
+#             processed_df = process_data(df)
+#             grouped_df = process_grouped_data(processed_df)
+#             st.session_state['processed_df'] = processed_df
+#             st.session_state['grouped_df'] = grouped_df
+#             st.session_state['data_loaded'] = True
+#         else:
+#             st.write("No data found for the selected date range.")
+#             st.session_state['data_loaded'] = False
+
+#     if st.session_state.get('data_loaded', False):
+#         all_step_types = st.session_state['grouped_df']['step_type'].unique().tolist()
+#         selected_step_types = st.multiselect('Select Step Type', all_step_types, default=all_step_types)
+
+#         filtered_df = st.session_state['grouped_df'][st.session_state['grouped_df']['step_type'].isin(selected_step_types)]
+
+#         if not filtered_df.empty:
+#             min_duration, max_duration = filtered_df['duration_minutes'].agg(['min', 'max'])
+#             min_duration, max_duration = int(min_duration), int(max_duration)
+#         else:
+#             min_duration, max_duration = 0, 0
+        
+#         initial_min_duration = max(1, min_duration)
+        
+#         duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (initial_min_duration, max_duration))
+        
+#         filtered_df = filtered_df[(filtered_df['duration_minutes'] >= duration_range[0]) & (filtered_df['duration_minutes'] <= duration_range[1])]
+
+#         display_data_and_plots(filtered_df, st.session_state['processed_df'])
+
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
 
@@ -445,8 +613,10 @@ def main():
         if not df.empty:
             processed_df = process_data(df)
             grouped_df = process_grouped_data(processed_df)
+            soc_report = generate_soc_report(processed_df)  # Generate the SOC report
             st.session_state['processed_df'] = processed_df
             st.session_state['grouped_df'] = grouped_df
+            st.session_state['soc_report'] = soc_report  # Save the SOC report
             st.session_state['data_loaded'] = True
         else:
             st.write("No data found for the selected date range.")
@@ -470,7 +640,9 @@ def main():
         
         filtered_df = filtered_df[(filtered_df['duration_minutes'] >= duration_range[0]) & (filtered_df['duration_minutes'] <= duration_range[1])]
 
-        display_data_and_plots(filtered_df, st.session_state['processed_df'])
+        display_data_and_plots(filtered_df, st.session_state['processed_df'], st.session_state['soc_report'])  # Pass the SOC report
+
+
 
 def display_data_and_plots(filtered_df, processed_df):
     st.write("Data Overview:")
@@ -486,9 +658,14 @@ def display_data_and_plots(filtered_df, processed_df):
     st.write("Filtered Grouped Data Overview:")
     st.dataframe(filtered_df)
     
+    st.write("SOC Report:")
+    st.dataframe(soc_report)
+    
     summary_df = create_day_wise_summary(filtered_df)
     st.write("Day-wise Summary:")
     st.dataframe(summary_df)
+
+
 
 if __name__ == "__main__":
     main()
