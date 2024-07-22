@@ -75,146 +75,6 @@ def get_location_description(lat, lon):
     location = geolocator.reverse((lat, lon), language='en')
     return location.address if location else "Unknown location"
 
-# def process_data(df):
-#     grouped = df.groupby('Model_Number')
-#     processed_dfs = []
-
-#     for name, group in grouped:
-#         group['timestamp'] = pd.to_datetime(group['DeviceDate'])
-#         group = group.sort_values(by='timestamp')
-#         group['time_diff'] = group['timestamp'].diff().dt.total_seconds()
-
-#         group['time_diff'].fillna(method='bfill', inplace=True)
-
-#         base_time_diff = 10
-#         base_alpha = 0.33
-
-#         group['alpha'] = group['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-#         group['alpha'] = group['alpha'].clip(upper=0.66)
-
-#         ema_current = group['BM_BattCurrent'].iloc[0]
-#         smoothed_currents = [ema_current]
-
-#         for i in range(1, len(group)):
-#             alpha = group['alpha'].iloc[i]
-#             current = group['BM_BattCurrent'].iloc[i]
-#             ema_current = ema_current * (1 - alpha) + current * alpha
-#             smoothed_currents.append(ema_current)
-
-#         group['Fitted_Current(A)'] = smoothed_currents
-#         group['Fitted_Voltage(V)'] = group['BM_BattVoltage'].ewm(alpha=base_alpha).mean()
-
-#         group['voltage_increase'] = group['Fitted_Voltage(V)'].diff() >= 0.05
-#         group['soc_increase'] = group['BM_SocPercent'].diff() >= 0.05
-
-#         cell_temp_columns = [col for col in group.columns if 'Cell_Temperature' in col]
-#         group['Pack_Temperature_(C)'] = group[cell_temp_columns].mean(axis=1)
-
-#         epsilon = 0.5
-#         conditions = [
-#             (group['Fitted_Current(A)'] > epsilon) | (group['voltage_increase'] | group['soc_increase']),
-#             (group['Fitted_Current(A)'] < -epsilon) & ~((group['voltage_increase']) | (group['soc_increase'])),
-#             abs(group['Fitted_Current(A)']) <= epsilon
-#         ]
-#         choices = ['charge', 'discharge', 'idle']
-#         group['state'] = np.select(conditions, choices, default='idle')
-
-#         group['state_change'] = (group['state'] != group['state'].shift(1)).cumsum()
-#         grp = group.groupby('state_change')
-#         group['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-
-#         # Apply different duration thresholds based on the state
-#         group['filtered_state'] = np.where(
-#             (group['state'] == 'idle') & (group['state_duration'] > 600) | 
-#             (group['state'] != 'idle') & (group['state_duration'] > 60), 
-#             group['state'], 
-#             np.nan
-#         )
-        
-#         group['filtered_state'].fillna(method='ffill', inplace=True)
-
-#         state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
-#         group['step_type'] = group['filtered_state'].map(state_mapping)
-
-#         processed_dfs.append(group)
-
-#     return pd.concat(processed_dfs)
-
-# def process_data(df):
-#     grouped = df.groupby('Model_Number')
-#     processed_dfs = []
-
-#     for name, group in grouped:
-#         group['timestamp'] = pd.to_datetime(group['DeviceDate'])
-#         group = group.sort_values(by='timestamp')
-#         group['time_diff'] = group['timestamp'].diff().dt.total_seconds()
-
-#         group['time_diff'].fillna(method='bfill', inplace=True)
-
-#         base_time_diff = 10
-#         base_alpha = 0.33
-
-#         group['alpha'] = group['time_diff'].apply(lambda x: base_alpha / x * base_time_diff if x > 0 else base_alpha)
-#         group['alpha'] = group['alpha'].clip(upper=0.66)
-
-#         ema_current = group['BM_BattCurrent'].iloc[0]
-#         smoothed_currents = [ema_current]
-
-#         for i in range(1, len(group)):
-#             alpha = group['alpha'].iloc[i]
-#             current = group['BM_BattCurrent'].iloc[i]
-#             ema_current = ema_current * (1 - alpha) + current * alpha
-#             smoothed_currents.append(ema_current)
-
-#         group['Fitted_Current(A)'] = smoothed_currents
-#         group['Fitted_Voltage(V)'] = group['BM_BattVoltage'].ewm(alpha=base_alpha).mean()
-
-#         group['voltage_increase'] = group['Fitted_Voltage(V)'].diff() >= 0.05
-#         group['soc_increase'] = group['BM_SocPercent'].diff() >= 0.05
-
-#         cell_temp_columns = [col for col in group.columns if 'Cell_Temperature' in col]
-#         group['Pack_Temperature_(C)'] = group[cell_temp_columns].mean(axis=1)
-
-#         epsilon = 0.5
-#         conditions = [
-#             (group['Fitted_Current(A)'] > epsilon) | (group['voltage_increase'] | group['soc_increase']),
-#             (group['Fitted_Current(A)'] < -epsilon) & ~((group['voltage_increase']) | (group['soc_increase'])),
-#             abs(group['Fitted_Current(A)']) <= epsilon
-#         ]
-#         choices = ['charge', 'discharge', 'idle']
-#         group['state'] = np.select(conditions, choices, default='idle')
-
-#         group['state_change'] = (group['state'] != group['state'].shift(1)).cumsum()
-#         grp = group.groupby('state_change')
-#         group['state_duration'] = grp['timestamp'].transform(lambda x: (x.max() - x.min()).total_seconds())
-
-#         # Calculate SOC difference for each group
-#         group['soc_difference'] = grp['BM_SocPercent'].transform(lambda x: abs(x.iloc[0] - x.iloc[-1]))
-
-        # Apply different duration thresholds based on the state
-        # group['filtered_state'] = np.where(
-        #     ((group['state'] == 'idle') & (group['state_duration'] > 600)) | 
-        #     ((group['state'] != 'idle') & (group['state_duration'] > 30)), 
-        #     group['state'], 
-        #     np.nan
-        # )
-
-#         # Apply SOC difference logic for idle states
-#         group['filtered_state'] = np.where(
-#             (group['state'] == 'idle') & (group['soc_difference'] > 1), 
-#             np.nan, 
-#             group['filtered_state']
-#         )
-
-#         group['filtered_state'].fillna(method='ffill', inplace=True)
-
-#         state_mapping = {'charge': 0, 'discharge': 1, 'idle': 2}
-#         group['step_type'] = group['filtered_state'].map(state_mapping)
-
-#         processed_dfs.append(group)
-
-#     return pd.concat(processed_dfs)
-
 
 def process_data(df):
     grouped = df.groupby('Model_Number')
@@ -300,73 +160,6 @@ def calculate_percentile(n):
     percentile_.__name__ = 'percentile_%s' % n
     return percentile_
 
-# def process_grouped_data(df):
-#     grouped = df.groupby((df['filtered_state'] != df['filtered_state'].shift()).cumsum())
-#     result = grouped.agg(
-#         start_timestamp=('timestamp', 'min'),
-#         end_timestamp=('timestamp', 'max'),
-#         step_type=('filtered_state', 'first'),
-#         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
-#         soc_start=('BM_SocPercent', 'first'),
-#         soc_end=('BM_SocPercent', 'last'),
-#         voltage_start=('Fitted_Voltage(V)', 'first'),
-#         voltage_end=('Fitted_Voltage(V)', 'last'),
-#         average_current=('Fitted_Current(A)', 'mean'),
-#         median_current=('Fitted_Current(A)', 'median'),
-#         min_current=('Fitted_Current(A)', calculate_percentile(10)),
-#         max_current=('Fitted_Current(A)', calculate_percentile(90)),
-#         current_25th=('Fitted_Current(A)', calculate_percentile(25)),
-#         current_75th=('Fitted_Current(A)', calculate_percentile(75)),
-#         median_max_cell_temperature=('Max_monomer_temperature', 'median'),
-#         median_min_cell_temperature=('Min_monomer_temperature', 'median'),
-#         median_pack_temperature=('Pack_Temperature_(C)', 'median')
-#     )
-
-#     result['date'] = result['start_timestamp'].dt.date
-#     result['change_in_soc'] = result['soc_end'] - result['soc_start']
-
-#     columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
-#                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
-#                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
-#                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
-
-#     result = result.reindex(columns=columns_ordered)
-    
-#     return result
-
-# def process_grouped_data(df):
-#     grouped = df.groupby((df['final_state'] != df['final_state'].shift()).cumsum())
-#     result = grouped.agg(
-#         start_timestamp=('timestamp', 'min'),
-#         end_timestamp=('timestamp', 'max'),
-#         step_type=('final_state', 'first'),
-#         duration_minutes=('timestamp', lambda x: (x.max() - x.min()).total_seconds() / 60),
-#         soc_start=('BM_SocPercent', 'first'),
-#         soc_end=('BM_SocPercent', 'last'),
-#         voltage_start=('Fitted_Voltage(V)', 'first'),
-#         voltage_end=('Fitted_Voltage(V)', 'last'),
-#         average_current=('Fitted_Current(A)', 'mean'),
-#         median_current=('Fitted_Current(A)', 'median'),
-#         min_current=('Fitted_Current(A)', calculate_percentile(10)),
-#         max_current=('Fitted_Current(A)', calculate_percentile(90)),
-#         current_25th=('Fitted_Current(A)', calculate_percentile(25)),
-#         current_75th=('Fitted_Current(A)', calculate_percentile(75)),
-#         median_max_cell_temperature=('Max_monomer_temperature', 'median'),
-#         median_min_cell_temperature=('Min_monomer_temperature', 'median'),
-#         median_pack_temperature=('Pack_Temperature_(C)', 'median')
-#     )
-
-#     result['date'] = result['start_timestamp'].dt.date
-#     result['change_in_soc'] = result['soc_end'] - result['soc_start']
-
-#     columns_ordered = ['date', 'start_timestamp', 'end_timestamp', 'step_type', 'duration_minutes',
-#                        'soc_start', 'soc_end', 'change_in_soc', 'voltage_start', 'voltage_end',
-#                        'average_current', 'median_current', 'min_current', 'max_current', 'current_25th',
-#                        'current_75th', 'median_max_cell_temperature', 'median_min_cell_temperature', 'median_pack_temperature']
-
-#     result = result.reindex(columns=columns_ordered)
-    
-#     return result
 
 def process_grouped_data(df):
     # Group by 'final_state' change and 'Model_Number'
@@ -414,11 +207,25 @@ def fetch_location_description(lat, lon):
     location = geolocator.reverse((lat, lon), exactly_one=True)
     return location.address if location else "Unknown Location"
 
+def fetch_mapping_data():
+    conn = psycopg2.connect(
+        database="postgres",
+        user='postgres.gqmpfexjoachyjgzkhdf',
+        password='Change@2015Log9',
+        host='aws-0-ap-south-1.pooler.supabase.com',
+        port='5432'
+    )
+    cursor = conn.cursor()
+    cursor.execute("SELECT telematics_number, partner_id, product, deployed_city, reg_no, chassis_number FROM public.mapping_table")
+    mapping_data = cursor.fetchall()
+    mapping_df = pd.DataFrame(mapping_data, columns=['telematics_number', 'partner_id', 'product', 'deployed_city', 'reg_no', 'chassis_number'])
+    conn.close()
+    return mapping_df
+
+
 def generate_soc_report(df):
-    # Group by 'final_state' change and 'Model_Number'
     grouped = df.groupby(['Model_Number', (df['final_state'] != df['final_state'].shift()).cumsum()])
 
-    # Aggregate the data
     result = grouped.agg(
         start_timestamp=('timestamp', 'min'),
         end_timestamp=('timestamp', 'max'),
@@ -439,12 +246,13 @@ def generate_soc_report(df):
         median_pack_temperature=('Pack_Temperature_(C)', 'median')
     )
 
-    # Calculate the SOC change
     result['start_date'] = result['start_timestamp'].dt.date
     result['change_in_soc'] = result['soc_end'] - result['soc_start']
     result['end_date'] = result['end_timestamp'].dt.date
 
-    # Ensure columns are correctly ordered and renamed
+    # Debug: Print column names before renaming
+    print("Columns before renaming:", result.columns)
+
     result.rename(columns={
         'Model_Number': 'vehicle_number',
         'start_timestamp': 'start_time',
@@ -454,11 +262,12 @@ def generate_soc_report(df):
         'end_date': 'end_date'
     }, inplace=True)
 
-    # Create additional columns
+    # Debug: Print column names after renaming
+    print("Columns after renaming:", result.columns)
+
     result['primary_id'] = result.apply(lambda row: f"{row['vehicle_number']}-{row['start_time']}", axis=1)
     result['soc_range'] = result.apply(lambda row: f"{row['soc_start']}% - {row['soc_end']}%", axis=1)
 
-    # Initialize new columns with None
     result['total_distance_km'] = None
     result['total_running_time_seconds'] = None
     result['energy_consumption'] = None
@@ -468,38 +277,23 @@ def generate_soc_report(df):
 
     for name, group in grouped:
         if group['final_state'].iloc[0] == 'discharge':
-            # Calculate total distance
             total_distance = 0
             for i in range(1, len(group)):
                 coord1 = (group.iloc[i-1]['Latitude'], group.iloc[i-1]['Longitude'])
                 coord2 = (group.iloc[i]['Latitude'], group.iloc[i]['Longitude'])
                 total_distance += haversine(coord1, coord2)
             result.loc[result['primary_id'] == name, 'total_distance_km'] = total_distance
-            # Calculate total running time in seconds
             total_running_time = group['duration_minutes'].sum() * 60
             result.loc[result['primary_id'] == name, 'total_running_time_seconds'] = total_running_time
         elif group['final_state'].iloc[0] == 'charge':
-            # Get charging location
             lat, lon = group.iloc[0]['Latitude'], group.iloc[0]['Longitude']
             result.loc[result['primary_id'] == name, 'charging_location'] = fetch_location_description(lat, lon)
             result.loc[result['primary_id'] == name, 'charging_location_coordinates'] = f"{lat}, {lon}"
         elif group['final_state'].iloc[0] == 'idle':
-            # Calculate total halt time in seconds
             total_halt_time = group['duration_minutes'].sum() * 60
             result.loc[result['primary_id'] == name, 'total_halt_time_seconds'] = total_halt_time
 
-    # Fetch additional details from Supabase
-    conn = psycopg2.connect(
-        database="postgres",
-        user='postgres.gqmpfexjoachyjgzkhdf',
-        password='Change@2015Log9',
-        host='aws-0-ap-south-1.pooler.supabase.com',
-        port='5432'
-    )
-    cursor = conn.cursor()
-    cursor.execute("SELECT telematics_number, partner_id, product, deployed_city, reg_no, chassis_number FROM public.mapping_table")
-    mapping_data = cursor.fetchall()
-    mapping_df = pd.DataFrame(mapping_data, columns=['telematics_number', 'partner_id', 'product', 'deployed_city', 'reg_no', 'chassis_number'])
+    mapping_df = fetch_mapping_data()
     mapping_dict = mapping_df.set_index('telematics_number').T.to_dict()
 
     def fetch_mapping_info(telematics_number, key):
@@ -549,57 +343,6 @@ def create_day_wise_summary(df):
     }, inplace=True)
 
     return day_wise_summary
-
-# def main():
-#     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
-
-#     with st.sidebar:
-#         st.title("Filter Settings")
-#         model_numbers_and_dates = fetch_model_numbers_and_dates()
-#         model_numbers = model_numbers_and_dates['Model_Number'].unique().tolist()
-#         selected_model_numbers = st.multiselect('Select Model Numbers', model_numbers)
-
-#         date_range = model_numbers_and_dates['DeviceDate'].unique()
-#         start_date = st.date_input("Start Date", min(date_range), min_value=min(date_range), max_value=max(date_range))
-#         end_date = st.date_input("End Date", max(date_range), min_value=min(date_range), max_value=max(date_range))
-
-#         fetch_button = st.button("Fetch Data")
-
-#     if fetch_button or 'data_loaded' not in st.session_state:
-#         if start_date > end_date:
-#             st.error("End date must be after start date.")
-#             return
-
-#         df = fetch_data(selected_model_numbers, start_date, end_date)
-#         if not df.empty:
-#             processed_df = process_data(df)
-#             grouped_df = process_grouped_data(processed_df)
-#             st.session_state['processed_df'] = processed_df
-#             st.session_state['grouped_df'] = grouped_df
-#             st.session_state['data_loaded'] = True
-#         else:
-#             st.write("No data found for the selected date range.")
-#             st.session_state['data_loaded'] = False
-
-#     if st.session_state.get('data_loaded', False):
-#         all_step_types = st.session_state['grouped_df']['step_type'].unique().tolist()
-#         selected_step_types = st.multiselect('Select Step Type', all_step_types, default=all_step_types)
-
-#         filtered_df = st.session_state['grouped_df'][st.session_state['grouped_df']['step_type'].isin(selected_step_types)]
-
-#         if not filtered_df.empty:
-#             min_duration, max_duration = filtered_df['duration_minutes'].agg(['min', 'max'])
-#             min_duration, max_duration = int(min_duration), int(max_duration)
-#         else:
-#             min_duration, max_duration = 0, 0
-        
-#         initial_min_duration = max(1, min_duration)
-        
-#         duration_range = st.slider("Select Duration Range (minutes)", min_duration, max_duration, (initial_min_duration, max_duration))
-        
-#         filtered_df = filtered_df[(filtered_df['duration_minutes'] >= duration_range[0]) & (filtered_df['duration_minutes'] <= duration_range[1])]
-
-#         display_data_and_plots(filtered_df, st.session_state['processed_df'])
 
 def main():
     st.set_page_config(layout="wide", page_title="Battery Discharge Analysis")
