@@ -9,3 +9,5 @@ sqlalchemy
 matplotlib
 pygwalker
 clickhouse-connect
+geopy
+haversine
